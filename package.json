@@ -1,0 +1,24 @@
+{
+  "name": "pi-grok-build-skin",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Grok Build-inspired no-fork skin for Pi",
+  "type": "module",
+  "keywords": [
+    "pi-package",
+    "pi-theme",
+    "grok-build"
+  ],
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-tui": "*"
+  },
+  "pi": {
+    "extensions": [
+      "./extensions/grok-build-skin.ts"
+    ],
+    "themes": [
+      "./themes/oscura-midnight.json"
+    ]
+  }
+}
