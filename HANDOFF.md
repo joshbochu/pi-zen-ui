@@ -8,7 +8,7 @@ Working no-fork Grok Build-inspired skin for Pi `0.80.6`.
 - Installed globally as local package: `../../pi-grok-build-skin`
 - Global Pi settings: `/Users/jb/.pi/agent/settings.json`
 - Pre-install settings backup: `/Users/jb/.pi/agent/settings.json.grok-skin.20260719T215844.bak`
-- Package directory is a Git repository on branch `main`.
+- Package directory is a clean Git repository on branch `main`; latest commit contains the approved composer geometry.
 - Base Pi theme remains `dark`; extension applies `oscura-midnight` in memory.
 - Extension temporarily sets terminal canvas background to `#030304` with OSC 11 and restores the profile default with OSC 111.
 - Handoff refreshed and implementation validated on `2026-07-20`.
@@ -26,10 +26,12 @@ Current user preferences:
 - Grok Build's Oscura Midnight palette and identifier
 - Full terminal canvas uses `#030304` while Pi runs, then resets on shutdown
 - Input editor must be an inset rectangle, not full-width horizontal rules
-- Rectangle keeps corners, vertical sides, and 2-column outer margins
+- Rectangle uses rounded `╭ ╮ ╰ ╯` corners and vertical sides with no extra skin margin; terminal padding supplies the visual edge inset
+- Prompt arrow uses 1 blank cell after the left border, matching the 27px logical inset in the Retina reference screenshot
 - Bottom shortcut row (`shift+tab:mode │ …`) must stay hidden
 - Footer stays 1 CWD/branch-only line
 - Model, thinking level, and context percentage stay in the lower editor border
+- Lower-border metadata ends with ` · 0% ─╯`: 1 space separates text, then 1 border segment reconnects the rounded corner
 - Empty composer must stay compact at 3 rows: top, body, bottom/metadata
 - A separate metadata row was tried and rejected because it made the composer too tall
 - Slash/autocomplete menu stays above the editor with Grok-style chrome
@@ -94,23 +96,28 @@ Important symbols:
 
 - `setPaddingX()` forces 2 columns because Pi reapplies editor padding after construction.
 - `render()` calls the base editor with reduced inner width.
-- `outerMargin` controls space outside the rectangle.
+- `CHROME_MARGIN` controls any shared inset for the editor, activity row, and footer; current value is `0`.
+- `outerMargin` applies that inset outside the editor rectangle.
 - `contentWidth` reserves room for margins and vertical borders.
+- `PROMPT_INSET` reserves 1 cell before `❯`; `baseEditorWidth` shrinks by the same amount so wrapping and cursor geometry remain correct.
 - `borderLineIndex()` locates the base editor's bottom border safely through ANSI output.
-- Top/body/bottom lines become `┌─┐`, `│ │`, and `└─┘`.
-- Prompt prefix replaces the first 2 padding spaces with bold `❯ `.
-- Model, thinking level, and rounded context percentage render inside the lower border.
+- Top/body/bottom lines become `╭─╮`, `│ │`, and `╰─╯` for the smoothest curve available on a terminal character grid.
+- Prompt prefix renders as `│ ❯ text`; continuation rows render as `│   text` so text columns align.
+- Model, thinking level, and rounded context percentage render inside the lower border; `cornerConnector` adds border-colored `─` before `╯`.
 - Autocomplete rows move above the editor without replacing Pi's completion behavior.
 - Autocomplete chrome uses `─` dividers, top-right match count, selected background, and `❯ ` selection prefix.
 
 Current geometry:
 
 ```ts
-const outerMargin = width >= 12 ? 2 : 0;
+const CHROME_MARGIN = 0;
+const PROMPT_INSET = 1;
+const outerMargin = width >= 12 ? CHROME_MARGIN : 0;
 const contentWidth = Math.max(1, width - outerMargin * 2 - 2);
+const baseEditorWidth = Math.max(1, contentWidth - PROMPT_INSET);
 ```
 
-Change `outerMargin` to tune horizontal inset. Keep every rendered line at or below `width`; use `visibleWidth()` and `truncateToWidth()` for ANSI-safe sizing.
+The original 2-column inset measured roughly 50px from the physical window edge. A 1-column inset still measured roughly 40px. The user wants 32px on both sides, so the skin now adds no terminal-cell margin and relies on the terminal application's own padding. A 32px left/40px right physical gap can still occur because terminals fit only whole character cells and leave remainder pixels on the right; Pi cannot draw into that fractional-cell remainder. Keep every rendered line at or below `width`; use `visibleWidth()` and `truncateToWidth()` for ANSI-safe sizing.
 
 Upgrade-sensitive details:
 
@@ -242,6 +249,11 @@ Current validation state (`2026-07-20`):
 - Isolated TUI startup resolves `oscura-midnight` without warning
 - Empty composer stays 3 rows with inline `model · thinking · context%`
 - Autocomplete panel renders above the composer with count and `❯` selection
+- 120×36 tmux capture confirms editor borders occupy columns 0–119 with no skin margin
+- Rounded `╭ ╮ ╰ ╯` composer corners render at full width without overflow
+- Multiline capture confirms `│ ❯ ff` and `│   fff` align text columns with a 1-cell arrow inset
+- Lower border ends with `· 0% ─╯`, preserving metadata spacing while reconnecting the rounded corner
+- Boxed editor gained 4 columns of width versus the original 2-column margins
 - Boxed editor and single-line footer render within terminal width
 - Package resource-load smoke test passes with explicit extension/theme paths
 - OSC canvas smoke test emits 1 set and 1 reset on normal exit
@@ -372,11 +384,10 @@ Grok Build is Apache-2.0 licensed. This package reimplements presentation behavi
 
 ## Next-session priorities
 
-1. Run `/reload` and get user approval on real terminal colors and spacing.
+1. Run `/reload` to load the committed composer geometry in the normal Pi session.
 2. Compare `/` autocomplete against the supplied Grok screenshot at the user's normal terminal width.
-3. Commit a clean baseline before larger visual experiments so changes stay easy to revert.
-4. Change geometry only after a fresh screenshot identifies a specific mismatch.
-5. Re-run strict TypeScript, theme-token, resource-load, and TUI smoke checks after every edit.
+3. Change geometry only after a fresh screenshot identifies a specific mismatch.
+4. Re-run strict TypeScript, theme-token, resource-load, and TUI smoke checks after every edit.
 
 Deferred ideas, not approved work:
 

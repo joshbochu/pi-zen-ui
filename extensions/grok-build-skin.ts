@@ -21,6 +21,8 @@ const THEME_PATH = resolve(
   "../themes/oscura-midnight.json",
 );
 const STATUS_KEY = "grok-build-turn-status";
+const CHROME_MARGIN = 0;
+const PROMPT_INSET = 1;
 const TERMINAL_CANVAS_COLOR = "#030304";
 const SET_TERMINAL_CANVAS = `\x1b]11;${TERMINAL_CANVAS_COLOR}\x07`;
 const RESET_TERMINAL_CANVAS = "\x1b]111\x07";
@@ -252,10 +254,12 @@ class GrokEditor extends CustomEditor {
   override render(width: number): string[] {
     if (width < 4) return super.render(width);
 
-    const outerMargin = width >= 12 ? 2 : 0;
+    const outerMargin = width >= 12 ? CHROME_MARGIN : 0;
     const contentWidth = Math.max(1, width - outerMargin * 2 - 2);
-    this.menuRenderState.width = Math.max(1, contentWidth - 4);
-    const lines = super.render(contentWidth);
+    const promptInset = contentWidth > PROMPT_INSET + 4 ? PROMPT_INSET : 0;
+    const baseEditorWidth = Math.max(1, contentWidth - promptInset);
+    this.menuRenderState.width = Math.max(1, baseEditorWidth - 4);
+    const lines = super.render(baseEditorWidth);
     const theme = this.fullTheme();
     const bottom = borderLineIndex(lines);
     if (bottom === undefined) return lines;
@@ -263,8 +267,17 @@ class GrokEditor extends CustomEditor {
     const editorLines = lines.slice(0, bottom + 1);
     const autocompleteLines = lines.slice(bottom + 1);
 
-    if (editorLines[1]?.startsWith("  ")) {
-      editorLines[1] = theme.fg("accent", theme.bold("❯ ")) + editorLines[1].slice(2);
+    const promptIndent = " ".repeat(promptInset);
+    for (let index = 1; index < bottom; index++) {
+      const line = editorLines[index] ?? "";
+      if (index === 1 && line.startsWith("  ")) {
+        editorLines[index] =
+          promptIndent +
+          theme.fg("accent", theme.bold("❯ ")) +
+          line.slice(2);
+      } else {
+        editorLines[index] = promptIndent + line;
+      }
     }
 
     const rawMetadata = ` ${this.metadataLabel()} `;
@@ -273,10 +286,15 @@ class GrokEditor extends CustomEditor {
       Math.max(1, Math.floor(contentWidth * 0.55)),
       "…",
     );
-    const borderWidth = Math.max(0, contentWidth - visibleWidth(metadata));
+    const cornerConnector = this.borderColor("─");
+    const borderWidth = Math.max(
+      0,
+      contentWidth - visibleWidth(metadata) - visibleWidth(cornerConnector),
+    );
     editorLines[bottom] =
       truncateToWidth(editorLines[bottom] ?? "", borderWidth, "") +
-      theme.fg("dim", metadata);
+      theme.fg("dim", metadata) +
+      cornerConnector;
 
     const editorBottom = editorLines.length - 1;
     const margin = " ".repeat(outerMargin);
@@ -285,14 +303,27 @@ class GrokEditor extends CustomEditor {
       const clipped = truncateToWidth(line, contentWidth, "");
       return clipped + " ".repeat(Math.max(0, contentWidth - visibleWidth(clipped)));
     };
+    const fitTopBorder = (line: string) => {
+      const clipped = truncateToWidth(line, contentWidth, "");
+      return (
+        clipped +
+        this.borderColor("─".repeat(Math.max(0, contentWidth - visibleWidth(clipped))))
+      );
+    };
     const box = editorLines.map((line, index) => {
       if (index === 0) {
-        return margin + this.borderColor("┌") + fit(line) + this.borderColor("┐") + margin;
+        return (
+          margin +
+          this.borderColor("╭") +
+          fitTopBorder(line) +
+          this.borderColor("╮") +
+          margin
+        );
       }
       if (index < editorBottom) {
         return margin + side + fit(line) + side + margin;
       }
-      return margin + this.borderColor("└") + fit(line) + this.borderColor("┘") + margin;
+      return margin + this.borderColor("╰") + fit(line) + this.borderColor("╯") + margin;
     });
 
     const menu = this.renderAutocompleteMenu(autocompleteLines, width, outerMargin, theme);
@@ -324,7 +355,13 @@ function installTurnStatus(ctx: ExtensionContext): void {
             "dim",
             `${formatElapsed(now - activity.turnStartedAt)}  Esc:stop`,
           );
-          return [alignSides(left, right, width)];
+          const margin = width >= CHROME_MARGIN * 2 + 1 ? CHROME_MARGIN : 0;
+          const innerWidth = width - margin * 2;
+          return [
+            " ".repeat(margin) +
+              alignSides(left, right, innerWidth) +
+              " ".repeat(margin),
+          ];
         },
         invalidate() {},
         dispose() {
@@ -348,7 +385,11 @@ function installFooter(ctx: ExtensionContext): void {
         const branch = footerData.getGitBranch();
         if (branch) left += ` (${branch})`;
 
-        return [truncateToWidth(theme.fg("dim", left), width, "…")];
+        const margin = width >= CHROME_MARGIN + 1 ? CHROME_MARGIN : 0;
+        return [
+          " ".repeat(margin) +
+            truncateToWidth(theme.fg("dim", left), width - margin, "…"),
+        ];
       },
     };
   });
