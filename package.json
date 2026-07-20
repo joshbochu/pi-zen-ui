@@ -1,13 +1,13 @@
 {
-  "name": "pi-grok-build-skin",
+  "name": "pi-oscura-theme",
   "version": "0.1.0",
   "private": true,
-  "description": "Grok Build-inspired no-fork skin for Pi",
+  "description": "Oscura Midnight theme and terminal skin for Pi",
   "type": "module",
   "keywords": [
     "pi-package",
     "pi-theme",
-    "grok-build"
+    "oscura-midnight"
   ],
   "peerDependencies": {
     "@earendil-works/pi-coding-agent": "*",
@@ -15,7 +15,7 @@
   },
   "pi": {
     "extensions": [
-      "./extensions/grok-build-skin.ts"
+      "./extensions/oscura-theme.ts"
     ],
     "themes": [
       "./themes/oscura-midnight.json"

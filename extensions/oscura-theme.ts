@@ -20,7 +20,7 @@ const THEME_PATH = resolve(
   dirname(fileURLToPath(import.meta.url)),
   "../themes/oscura-midnight.json",
 );
-const STATUS_KEY = "grok-build-turn-status";
+const STATUS_KEY = "oscura-theme-turn-status";
 const CHROME_MARGIN = 0;
 const PROMPT_INSET = 1;
 const TERMINAL_CANVAS_COLOR = "#030304";
@@ -54,7 +54,7 @@ function enableTerminalCanvas(): void {
   if (
     terminalCanvasActive ||
     !process.stdout.isTTY ||
-    process.env.PI_GROK_TERMINAL_CANVAS === "0"
+    process.env.PI_OSCURA_TERMINAL_CANVAS === "0"
   ) {
     return;
   }
@@ -169,7 +169,7 @@ function borderLineIndex(lines: string[]): number | undefined {
   return undefined;
 }
 
-class GrokEditor extends CustomEditor {
+class OscuraEditor extends CustomEditor {
   private readonly menuRenderState: { width: number };
 
   constructor(
@@ -395,13 +395,13 @@ function installFooter(ctx: ExtensionContext): void {
   });
 }
 
-export default function grokBuildSkin(pi: ExtensionAPI) {
+export default function oscuraTheme(pi: ExtensionAPI) {
   let activeUi: ExtensionContext["ui"] | undefined;
 
   // Pi exposes one footer area. Keep pi-powerbar installed, but suppress its
   // extra widget while this skin owns the terminal chrome.
   pi.events.on("powerbar:update", () => {
-    if (process.env.PI_GROK_KEEP_POWERBAR !== "1") {
+    if (process.env.PI_OSCURA_KEEP_POWERBAR !== "1") {
       activeUi?.setWidget("powerbar", undefined);
     }
   });
@@ -410,12 +410,12 @@ export default function grokBuildSkin(pi: ExtensionAPI) {
     if (ctx.mode === "tui") {
       setTimeout(() => {
         if (activeUi !== ctx.ui) return;
-        const grokTheme = ctx.ui.getTheme(THEME_NAME);
-        const selected = grokTheme
-          ? ctx.ui.setTheme(grokTheme)
+        const oscuraTheme = ctx.ui.getTheme(THEME_NAME);
+        const selected = oscuraTheme
+          ? ctx.ui.setTheme(oscuraTheme)
           : { success: false, error: `Theme not found after discovery: ${THEME_NAME}` };
         if (!selected.success) {
-          ctx.ui.notify(`Grok skin theme unavailable: ${selected.error ?? THEME_NAME}`, "warning");
+          ctx.ui.notify(`Oscura theme unavailable: ${selected.error ?? THEME_NAME}`, "warning");
         }
       }, 0);
     }
@@ -426,7 +426,7 @@ export default function grokBuildSkin(pi: ExtensionAPI) {
     if (ctx.mode !== "tui") return;
     activeUi = ctx.ui;
     enableTerminalCanvas();
-    if (process.env.PI_GROK_KEEP_POWERBAR !== "1") {
+    if (process.env.PI_OSCURA_KEEP_POWERBAR !== "1") {
       ctx.ui.setWidget("powerbar", undefined);
     }
 
@@ -442,7 +442,7 @@ export default function grokBuildSkin(pi: ExtensionAPI) {
     installFooter(ctx);
 
     ctx.ui.setEditorComponent((tui, editorTheme, keybindings) =>
-      new GrokEditor(
+      new OscuraEditor(
         tui,
         editorTheme,
         keybindings,
