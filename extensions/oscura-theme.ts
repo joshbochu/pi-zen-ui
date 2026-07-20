@@ -2,7 +2,9 @@ import { homedir } from "node:os";
 import { basename, dirname, isAbsolute, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  AssistantMessageComponent,
   CustomEditor,
+  UserMessageComponent,
   type ExtensionAPI,
   type ExtensionContext,
   type KeybindingsManager,
@@ -22,31 +24,60 @@ const THEME_PATH = resolve(
 );
 const STATUS_KEY = "oscura-theme-turn-status";
 const CHROME_MARGIN = 0;
-const PROMPT_INSET = 1;
+// Space inside the box before ❯. Glyph stays put; chat text is shifted to the tip.
+const PROMPT_INSET = 2;
+const PROMPT_MARKER = "❯ ";
+// Absolute column of the pointer tip / input text start:
+//   CHROME_MARGIN + box border (│) + PROMPT_INSET + "❯ "
+const TEXT_ALIGN_PAD =
+  CHROME_MARGIN + 1 + PROMPT_INSET + visibleWidth(PROMPT_MARKER);
 const TERMINAL_CANVAS_COLOR = "#030304";
 const SET_TERMINAL_CANVAS = `\x1b]11;${TERMINAL_CANVAS_COLOR}\x07`;
 const RESET_TERMINAL_CANVAS = "\x1b]111\x07";
 const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
-type ActivityKind = "thinking" | "responding" | "tool" | "waiting";
+/**
+ * Pi only exposes outputPad 0|1 via settings. Pin user/assistant message padding
+ * so body text lines up with the tip of ❯ in the composer (TEXT_ALIGN_PAD).
+ */
+function pinMessageTextAlign(Component: { prototype: object }): void {
+  const proto = Component.prototype as {
+    __oscuraTextAlignPad?: boolean;
+    setOutputPad?: (padding: number) => void;
+    updateContent?: (this: { outputPad: number }, ...args: unknown[]) => unknown;
+    rebuild?: (this: { outputPad: number }, ...args: unknown[]) => unknown;
+  };
+  if (proto.__oscuraTextAlignPad) return;
+  proto.__oscuraTextAlignPad = true;
 
-type ActivityState = {
-  active: boolean;
-  kind: ActivityKind;
-  label: string;
-  turnStartedAt: number;
-  phaseStartedAt: number;
-};
+  if (typeof proto.setOutputPad === "function") {
+    const original = proto.setOutputPad;
+    proto.setOutputPad = function (this: { outputPad: number }, _padding: number) {
+      return original.call(this, TEXT_ALIGN_PAD);
+    };
+  }
+  if (typeof proto.updateContent === "function") {
+    const original = proto.updateContent;
+    proto.updateContent = function (this: { outputPad: number }, ...args: unknown[]) {
+      this.outputPad = TEXT_ALIGN_PAD;
+      return original.apply(this, args);
+    };
+  }
+  if (typeof proto.rebuild === "function") {
+    const original = proto.rebuild;
+    proto.rebuild = function (this: { outputPad: number }, ...args: unknown[]) {
+      this.outputPad = TEXT_ALIGN_PAD;
+      return original.apply(this, args);
+    };
+  }
+}
 
-const activity: ActivityState = {
-  active: false,
-  kind: "waiting",
-  label: "Waiting…",
-  turnStartedAt: 0,
-  phaseStartedAt: 0,
-};
+pinMessageTextAlign(AssistantMessageComponent);
+pinMessageTextAlign(UserMessageComponent);
 
-let requestStatusRender: (() => void) | undefined;
+let activityActive = false;
+let activityStartedAt = 0;
+let requestActivityRender: (() => void) | undefined;
 let terminalCanvasActive = false;
 let resetTerminalCanvasOnExit: (() => void) | undefined;
 
@@ -106,59 +137,22 @@ function formatCwd(cwd: string): string {
   return fromHome === "" ? "~" : `~${sep}${fromHome}`;
 }
 
-function alignSides(left: string, right: string, width: number): string {
-  if (width <= 0) return "";
-  const leftWidth = visibleWidth(left);
-  const rightWidth = visibleWidth(right);
-  if (leftWidth + rightWidth + 1 <= width) {
-    return left + " ".repeat(width - leftWidth - rightWidth) + right;
-  }
-  return truncateToWidth(left, width, "…");
+function editorLayout(width: number): {
+  outerMargin: number;
+  contentWidth: number;
+  promptInset: number;
+} {
+  const outerMargin = width >= 12 ? CHROME_MARGIN : 0;
+  const contentWidth = Math.max(1, width - outerMargin * 2 - 2);
+  const promptInset = contentWidth > PROMPT_INSET + 4 ? PROMPT_INSET : 0;
+  return { outerMargin, contentWidth, promptInset };
 }
 
-function setActivity(kind: ActivityKind, label: string, resetPhase = true): void {
-  const now = Date.now();
-  activity.active = true;
-  activity.kind = kind;
-  activity.label = label;
-  if (!activity.turnStartedAt) activity.turnStartedAt = now;
-  if (resetPhase) activity.phaseStartedAt = now;
-  requestStatusRender?.();
-}
-
-function stopActivity(): void {
-  activity.active = false;
-  activity.turnStartedAt = 0;
-  activity.phaseStartedAt = 0;
-  requestStatusRender?.();
-}
-
-function firstLine(value: unknown): string | undefined {
-  if (typeof value !== "string") return undefined;
-  const line = value.trim().split(/\r?\n/, 1)[0]?.trim();
-  return line || undefined;
-}
-
-function toolActivity(toolName: string, args: Record<string, unknown> | undefined): string {
-  const input = args ?? {};
-  switch (toolName) {
-    case "bash":
-      return `Run ${firstLine(input.command) ?? "command"}`;
-    case "read":
-      return `Read ${firstLine(input.path) ?? "file"}`;
-    case "write":
-      return `Write ${firstLine(input.path) ?? "file"}`;
-    case "edit":
-      return `Edit ${firstLine(input.path) ?? "file"}`;
-    case "grep":
-      return `Search ${firstLine(input.pattern) ?? "project"}`;
-    case "find":
-      return `Find ${firstLine(input.pattern) ?? "files"}`;
-    case "ls":
-      return `List ${firstLine(input.path) ?? "."}`;
-    default:
-      return `Run ${toolName}`;
-  }
+function setActivity(active: boolean): void {
+  if (active && !activityActive) activityStartedAt = Date.now();
+  activityActive = active;
+  if (!active) activityStartedAt = 0;
+  requestActivityRender?.();
 }
 
 function borderLineIndex(lines: string[]): number | undefined {
@@ -254,9 +248,7 @@ class OscuraEditor extends CustomEditor {
   override render(width: number): string[] {
     if (width < 4) return super.render(width);
 
-    const outerMargin = width >= 12 ? CHROME_MARGIN : 0;
-    const contentWidth = Math.max(1, width - outerMargin * 2 - 2);
-    const promptInset = contentWidth > PROMPT_INSET + 4 ? PROMPT_INSET : 0;
+    const { outerMargin, contentWidth, promptInset } = editorLayout(width);
     const baseEditorWidth = Math.max(1, contentWidth - promptInset);
     this.menuRenderState.width = Math.max(1, baseEditorWidth - 4);
     const lines = super.render(baseEditorWidth);
@@ -268,13 +260,16 @@ class OscuraEditor extends CustomEditor {
     const autocompleteLines = lines.slice(bottom + 1);
 
     const promptIndent = " ".repeat(promptInset);
+    const frame = SPINNER_FRAMES[Math.floor(Date.now() / 120) % SPINNER_FRAMES.length] ?? "⠋";
+    const promptMarker = activityActive ? `${frame} ` : PROMPT_MARKER;
+    const markerWidth = visibleWidth(PROMPT_MARKER);
     for (let index = 1; index < bottom; index++) {
       const line = editorLines[index] ?? "";
-      if (index === 1 && line.startsWith("  ")) {
+      if (index === 1 && line.startsWith(" ".repeat(markerWidth))) {
         editorLines[index] =
           promptIndent +
-          theme.fg("accent", theme.bold("❯ ")) +
-          line.slice(2);
+          theme.fg("accent", theme.bold(promptMarker)) +
+          line.slice(markerWidth);
       } else {
         editorLines[index] = promptIndent + line;
       }
@@ -331,42 +326,29 @@ class OscuraEditor extends CustomEditor {
   }
 }
 
-function installTurnStatus(ctx: ExtensionContext): void {
-  ctx.ui.setWorkingVisible(false);
+function installCompactTurnStatus(ctx: ExtensionContext): void {
   ctx.ui.setWidget(
     STATUS_KEY,
     (tui, theme) => {
       const rerender = () => tui.requestRender();
-      requestStatusRender = rerender;
+      requestActivityRender = rerender;
       const timer = setInterval(() => {
-        if (activity.active) rerender();
+        if (activityActive) rerender();
       }, 120);
 
       return {
         render(width: number): string[] {
-          if (!activity.active || width <= 0) return [];
-          const now = Date.now();
-          const frame = SPINNER_FRAMES[Math.floor(now / 120) % SPINNER_FRAMES.length] ?? "⠋";
-          const color = activity.kind === "tool" ? "success" : activity.kind === "responding" ? "text" : "muted";
-          const left =
-            theme.fg(color, `${frame} ${activity.label}`) +
-            theme.fg("dim", ` ${formatElapsed(now - activity.phaseStartedAt)}`);
-          const right = theme.fg(
-            "dim",
-            `${formatElapsed(now - activity.turnStartedAt)}  Esc:stop`,
-          );
-          const margin = width >= CHROME_MARGIN * 2 + 1 ? CHROME_MARGIN : 0;
-          const innerWidth = width - margin * 2;
-          return [
-            " ".repeat(margin) +
-              alignSides(left, right, innerWidth) +
-              " ".repeat(margin),
-          ];
+          if (!activityActive || width <= 0) return [];
+          const fullText = `${formatElapsed(Date.now() - activityStartedAt)}  Esc:stop`;
+          const text = visibleWidth(fullText) <= width
+            ? fullText
+            : truncateToWidth("Esc:stop", width, "");
+          return [" ".repeat(Math.max(0, width - visibleWidth(text))) + theme.fg("dim", text)];
         },
         invalidate() {},
         dispose() {
           clearInterval(timer);
-          if (requestStatusRender === rerender) requestStatusRender = undefined;
+          if (requestActivityRender === rerender) requestActivityRender = undefined;
         },
       };
     },
@@ -432,13 +414,14 @@ export default function oscuraTheme(pi: ExtensionAPI) {
 
     ctx.ui.setTitle(`pi · ${basename(ctx.cwd) || ctx.cwd}`);
     ctx.ui.setHeader(() => ({ render: () => [], invalidate() {} }));
+    ctx.ui.setWorkingVisible(false);
     ctx.ui.setHiddenThinkingLabel("◆ Thought");
     ctx.ui.setWorkingIndicator({
       frames: SPINNER_FRAMES.map((frame) => ctx.ui.theme.fg("customMessageLabel", frame)),
       intervalMs: 120,
     });
 
-    installTurnStatus(ctx);
+    installCompactTurnStatus(ctx);
     installFooter(ctx);
 
     ctx.ui.setEditorComponent((tui, editorTheme, keybindings) =>
@@ -459,45 +442,11 @@ export default function oscuraTheme(pi: ExtensionAPI) {
     );
   });
 
-  pi.on("agent_start", () => {
-    const now = Date.now();
-    activity.turnStartedAt = now;
-    activity.phaseStartedAt = now;
-    setActivity("thinking", "Thinking…", false);
-  });
-
-  pi.on("turn_start", () => setActivity("waiting", "Waiting for response…"));
-
-  pi.on("message_update", (event) => {
-    switch (event.assistantMessageEvent.type) {
-      case "thinking_start":
-      case "thinking_delta":
-        setActivity("thinking", "Thinking…");
-        break;
-      case "text_start":
-      case "text_delta":
-        setActivity("responding", "Responding…");
-        break;
-      case "toolcall_start":
-      case "toolcall_delta":
-        setActivity("waiting", "Preparing tool…");
-        break;
-    }
-  });
-
-  pi.on("tool_execution_start", (event) => {
-    setActivity("tool", toolActivity(event.toolName, event.args));
-  });
-
-  pi.on("tool_execution_end", () => {
-    setActivity("waiting", "Waiting for response…");
-  });
-
-  pi.on("agent_end", () => setActivity("waiting", "Finishing…"));
-  pi.on("agent_settled", stopActivity);
+  pi.on("agent_start", () => setActivity(true));
+  pi.on("agent_settled", () => setActivity(false));
   pi.on("session_shutdown", () => {
     activeUi = undefined;
     disableTerminalCanvas();
-    stopActivity();
+    setActivity(false);
   });
 }
