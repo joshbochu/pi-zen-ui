@@ -1,13 +1,38 @@
 {
-  "name": "pi-oscura-theme",
+  "name": "@joshbochu/pi-oscura-theme",
   "version": "0.1.0",
-  "private": true,
   "description": "Oscura Midnight theme and terminal skin for Pi",
   "type": "module",
+  "license": "MIT",
+  "author": "joshbochu",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/joshbochu/pi-oscura-theme.git"
+  },
+  "homepage": "https://github.com/joshbochu/pi-oscura-theme#readme",
+  "bugs": {
+    "url": "https://github.com/joshbochu/pi-oscura-theme/issues"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "files": [
+    "bin",
+    "extensions",
+    "themes",
+    "README.md",
+    "LICENSE"
+  ],
+  "bin": {
+    "gpi-preview": "bin/gpi-preview"
+  },
   "keywords": [
     "pi-package",
     "pi-theme",
-    "oscura-midnight"
+    "pi",
+    "oscura-midnight",
+    "theme"
   ],
   "peerDependencies": {
     "@earendil-works/pi-coding-agent": "*",

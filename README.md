@@ -1,6 +1,24 @@
 # Pi Oscura Theme
 
-Oscura Midnight theme and terminal skin for Pi.
+Oscura Midnight theme and terminal skin for [Pi](https://pi.dev/).
+
+## Install
+
+```bash
+pi install npm:@joshbochu/pi-oscura-theme
+```
+
+Or from git:
+
+```bash
+pi install git:github.com/joshbochu/pi-oscura-theme
+```
+
+Local path (development):
+
+```bash
+pi install ~/dev/pi-oscura-theme
+```
 
 ## Included
 
@@ -10,14 +28,18 @@ Oscura Midnight theme and terminal skin for Pi.
 
 ## Preview
 
+From a clone, or after install:
+
 ```bash
-~/pi-oscura-theme/bin/gpi-preview
+./bin/gpi-preview
+# or
+npx --yes --package=@joshbochu/pi-oscura-theme gpi-preview
 ```
 
 Pass normal Pi arguments after the launcher:
 
 ```bash
-~/pi-oscura-theme/bin/gpi-preview --thinking low \
+./bin/gpi-preview --thinking low \
   "Show a short theme preview with headings, bullets, and code. Do not use tools."
 ```
 
@@ -39,11 +61,7 @@ After an ungraceful process kill, reset the terminal background manually:
 printf '\e]111\a'
 ```
 
-## Installation
-
-```bash
-pi install ~/pi-oscura-theme
-```
+## Notes
 
 The extension applies `oscura-midnight` in memory at TUI startup. Set `PI_OSCURA_KEEP_POWERBAR=1` to retain pi-powerbar's widget.
 
