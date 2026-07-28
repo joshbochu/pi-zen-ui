@@ -603,7 +603,10 @@ export default function oscuraTheme(pi: ExtensionAPI) {
 	pi.on("tool_execution_start", () => signal("tool_start"));
 	pi.on("tool_execution_end", () => signal("tool_end"));
 	pi.on("agent_end", (event) => {
-		if (event.willRetry) signal("retry");
+		// `willRetry` ships on the Wealthsimple fork but not on public 0.81.1. Read it
+		// structurally so the retrying phase lights up where the field exists and the
+		// extension still typechecks where it does not.
+		if ((event as { willRetry?: boolean }).willRetry) signal("retry");
 	});
 	pi.on("session_before_compact", () => signal("compact_start"));
 	pi.on("session_compact", () => signal("compact_end"));
