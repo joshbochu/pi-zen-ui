@@ -103,11 +103,11 @@ test("infoLine renders model, effort and flags", () => {
 		40,
 		plainStyle,
 	);
-	assert.equal(line, " grok-4 (high) · plan · auto ");
+	assert.equal(line, " grok-4 • high · plan · auto ");
 	assert.equal(visibleWidth(line), 29);
 	assert.equal(
 		infoLine({ model: "grok-4", effort: "high" }, 40, plainStyle),
-		" grok-4 (high) ",
+		" grok-4 • high ",
 	);
 	assert.equal(
 		infoLine({ model: "grok-4", effort: "" }, 40, plainStyle),
@@ -123,12 +123,12 @@ test("infoLine drops flags from the right, then truncates the model", () => {
 	} as const;
 	assert.equal(
 		infoLine(parts, 29, plainStyle),
-		" grok-4 (high) · plan · auto ",
+		" grok-4 • high · plan · auto ",
 	);
-	assert.equal(infoLine(parts, 28, plainStyle), " grok-4 (high) · plan ");
-	assert.equal(infoLine(parts, 21, plainStyle), " grok-4 (high) ");
-	assert.equal(infoLine(parts, 15, plainStyle), " grok-4 (high) ");
-	assert.equal(infoLine(parts, 14, plainStyle), " grok-4 (hig… ");
+	assert.equal(infoLine(parts, 28, plainStyle), " grok-4 • high · plan ");
+	assert.equal(infoLine(parts, 21, plainStyle), " grok-4 • high ");
+	assert.equal(infoLine(parts, 15, plainStyle), " grok-4 • high ");
+	assert.equal(infoLine(parts, 14, plainStyle), " grok-4 • hi… ");
 	assert.equal(visibleWidth(infoLine(parts, 14, plainStyle)), 14);
 	assert.equal(infoLine(parts, 3, plainStyle), " … ");
 	assert.equal(infoLine(parts, 2, plainStyle), "");
@@ -142,10 +142,10 @@ test("infoLine styles each piece", () => {
 		40,
 		{ model: purple, separator: grey, flag: grey },
 	);
-	assert.equal(stripAnsi(line), " grok-4 (low) · plan ");
+	assert.equal(stripAnsi(line), " grok-4 • low · plan ");
 	assert.equal(
 		line,
-		` \x1b[35mgrok-4 (low)\x1b[0m\x1b[90m · \x1b[0m\x1b[90mplan\x1b[0m `,
+		` \x1b[35mgrok-4 • low\x1b[0m\x1b[90m · \x1b[0m\x1b[90mplan\x1b[0m `,
 	);
 });
 

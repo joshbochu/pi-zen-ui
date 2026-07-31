@@ -44,7 +44,7 @@ pi install ~/dev/pi-oscura-theme
 
   ╭─────────────────────────────────────────────── pi-oscura-theme ──╮
   │ ❯ Build anything                                                 │
-  ╰──────────────────────────────── bedrock-claude-opus-5 (xhigh) ───╯
+  ╰──────────────────────────────── bedrock-claude-opus-5 • xhigh ───╯
 
   ⎇ fidelity │ ~/dev/pi-oscura-theme │ 21K / 1.0M
 ```
@@ -57,7 +57,7 @@ pi install ~/dev/pi-oscura-theme
 - **Prompt box** — rounded frame inside grok's 2-column outer pad; the border
   brightens `border` → `borderAccent` on focus and the whole interior fades
   toward the canvas when focus leaves, grok-style. Session title and
-  `model (effort)` share the focus-graded caption on the borders, a recognised
+  `model • effort` share the focus-graded caption on the borders, a recognised
   `/command` lights up purple, and `Build anything` shows while the buffer is
   empty and unfocused. The `❯` never turns into a spinner (and is never bold);
   grok keeps it still.

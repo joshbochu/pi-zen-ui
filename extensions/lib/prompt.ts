@@ -21,8 +21,10 @@ export function editorRenderWidth(
 	return Math.max(1, contentWidth - promptInset + rightPad);
 }
 
-/** Separator between info-line pieces: U+00B7 with single spaces. */
-const SEPARATOR = " · ";
+/** Oscura's preferred model/effort separator: U+2022 with single spaces. */
+const EFFORT_SEPARATOR = " • ";
+/** Grok's separator between trailing info-line flags: U+00B7. */
+const FLAG_SEPARATOR = " · ";
 
 // CSI, OSC and APC, each BEL- or ST-terminated. APC must accept BEL because
 // Pi's hardware-cursor marker is `\x1b_pi:c\x07` (`pi-tui` CURSOR_MARKER);
@@ -149,16 +151,18 @@ export interface InfoLineStyle {
 	flag: (s: string) => string;
 }
 
-/** Spec §3: `" " + model (effort) + (" · " + flag)* + " "`. */
+/** Oscura: `" " + model + (" • " + effort) + (" · " + flag)* + " "`. */
 export function infoLine(
 	parts: InfoLineParts,
 	maxWidth: number,
 	style: InfoLineStyle,
 ): string {
 	if (maxWidth <= 0) return "";
-	const model = parts.effort ? `${parts.model} (${parts.effort})` : parts.model;
+	const model = parts.effort
+		? `${parts.model}${EFFORT_SEPARATOR}${parts.effort}`
+		: parts.model;
 	const flags = parts.flags ?? [];
-	const sepWidth = visibleWidth(SEPARATOR);
+	const sepWidth = visibleWidth(FLAG_SEPARATOR);
 
 	for (let count = flags.length; count >= 0; count--) {
 		const shown = flags.slice(0, count);
@@ -168,7 +172,7 @@ export function infoLine(
 			shown.reduce((sum, flag) => sum + sepWidth + visibleWidth(flag), 0);
 		if (width > maxWidth) continue;
 		const tail = shown
-			.map((flag) => style.separator(SEPARATOR) + style.flag(flag))
+			.map((flag) => style.separator(FLAG_SEPARATOR) + style.flag(flag))
 			.join("");
 		return ` ${style.model(model)}${tail} `;
 	}

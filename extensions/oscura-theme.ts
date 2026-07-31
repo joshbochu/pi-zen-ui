@@ -578,8 +578,8 @@ export class OscuraEditor extends CustomEditor {
 			}
 		}
 
-		// Spec §3: model (effort) on the bottom border, right-aligned across the
-		// full content span (grok's info rect is the box minus its 2-col pads).
+		// Model • effort sits on the bottom border, right-aligned across the full
+		// content span (grok's info rect is the box minus its 2-col pads).
 		const info = this.chrome.showModelCaption()
 			? infoLine(
 					{

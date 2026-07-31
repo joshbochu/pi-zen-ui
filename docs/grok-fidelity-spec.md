@@ -115,7 +115,8 @@ TokyoNight-derived; deriving syntax colors from the purple chrome palette is wro
 - Info line sits **on** the bottom border row, right-aligned inside the box's
   content span (its trailing pad space lands 2 cells before `╯`, `mod.rs:3363`):
   `" " + model + (" · " + flag)* + " "`.
-  - model text is `"{model_id} ({reasoning_effort})"`.
+  - grok's model text is `"{model_id} ({reasoning_effort})"`; the Oscura port
+    intentionally renders `"{model_id} • {reasoning_effort}"` with U+2022 instead.
   - separator `" · "` U+00B7 in `gray_dim` focused, blended 0.6 toward the canvas
     unfocused; flags in `gray` focused, blended 0.5 unfocused; `plan` in
     `accent_plan`, `auto` in `accent_system` (no Pi state maps to these).
