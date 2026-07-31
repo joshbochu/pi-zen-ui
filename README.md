@@ -61,6 +61,10 @@ pi install ~/dev/pi-oscura-theme
   `/command` lights up purple, and `Build anything` shows while the buffer is
   empty and unfocused. The `❯` never turns into a spinner (and is never bold);
   grok keeps it still.
+- **Completion dropdown** — grok's panel chrome above the box: `bg_highlight`
+  rules with the match count riding the top rule, a `bg_light` body, up to 6
+  rows with the typed prefix highlighted in lavender, and the selected row
+  bold on `bg_visual` behind a still `❯`.
 - **Footer** — branch, path, and the context chip on grok's usage gradient
   (white → lavender → gold → red across 50/75/95%), a blank row under the box.
 - **Markdown** — `#` markers hidden at every level, `•` bullets, a three-column

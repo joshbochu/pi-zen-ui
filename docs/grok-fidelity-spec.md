@@ -125,6 +125,31 @@ TokyoNight-derived; deriving syntax colors from the purple chrome palette is wro
     which Pi does not have.
   - There is **no** context percentage on the prompt border.
 
+### Completion dropdown (`render_dropdown_chrome`, `slash_dropdown.rs`)
+
+The slash / file-search dropdown is a panel anchored to the prompt:
+
+- Panel spans the prompt's outer pad (`panel_x = hpad`, width minus both pads).
+- Top and bottom borders are plain `─` rules in `bg_highlight` (ELEVATED for
+  oscura) on the canvas; the match count sits **on** the top rule in `gray`,
+  one cell in from the right corner.
+- Panel body fills with `bg_light`; item rows are inset one extra column
+  (`dropdown_content_inset = 1 + hpad`), putting the selection gutter 3 cells
+  inside the panel.
+- Row layout: 2-col gutter (`❯ ` on the selected row, blanks elsewhere) +
+  aligned label column (≤ 60% of the width, hard cap 40) + 2-col gap +
+  description.
+- Colors: label `text_primary`, fuzzy-matched label chars `fuzzy_accent`
+  (PURPLE_BRIGHT), description `gray`, optional `[tag]` suffix
+  `accent_system`. The selected row sits on `bg_visual` with label and ❯
+  **bold** — grok does not switch the selected label to the accent colour.
+- At most `MAX_VISIBLE_SUGGESTIONS = 6` items; overflow adds a 2-col
+  scrollbar gutter (`gray_dim` thumb on `bg_dark`).
+- Pi funnels every provider through one `SelectList` with no match indices,
+  so the port highlights the query prefix instead of true fuzzy runs, and
+  the wrapped-description continuation rows, `[tag]` suffixes, scrollbar and
+  hover states stay grok-only (§10).
+
 ## 4. Turn status row (`turn_status.rs`)
 
 One row above the prompt, with **one blank gap row** between it and the box

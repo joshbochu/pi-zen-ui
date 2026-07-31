@@ -83,6 +83,35 @@ const DIM_PLACEHOLDER_HEX = blendHex(TERMINAL_CANVAS_COLOR, "#81868f", 0.66);
 /** Theme in use, for the markdown skin patched onto message prototypes. */
 let activeTheme: Theme | undefined;
 
+/**
+ * grok's dropdown label styling (`slash_dropdown.rs build_item_lines`): the
+ * label is text_primary with fuzzy-matched chars in fuzzy_accent, bold on the
+ * selected row only. Pi exposes no match indices, but its slash menu filters
+ * by prefix, so the matched run is the query itself when the label starts
+ * with it.
+ */
+function paintMenuLabel(
+	theme: Theme,
+	label: string,
+	query: string,
+	bold: boolean,
+): string {
+	const paint = (key: ThemeColor, s: string) =>
+		s === "" ? "" : bold ? theme.fg(key, theme.bold(s)) : theme.fg(key, s);
+	// Pi lists slash commands without their leading `/`, so match the token
+	// both ways round.
+	const match = [query, query.replace(/^\//, "")].find(
+		(candidate) => candidate !== "" && label.startsWith(candidate),
+	);
+	if (match !== undefined) {
+		return (
+			paint("accent", label.slice(0, match.length)) +
+			paint("text", label.slice(match.length))
+		);
+	}
+	return paint("text", label);
+}
+
 /** Truecolor foreground for a computed hex, `fallback` key elsewhere. */
 function hexFg(
 	theme: Theme,
@@ -250,7 +279,7 @@ interface EditorChrome {
 
 /** Exported for the pty-free render harness; Pi only sees the default export. */
 export class OscuraEditor extends CustomEditor {
-	private readonly menuRenderState: { width: number };
+	private readonly menuRenderState: { width: number; query: string };
 
 	constructor(
 		tui: TUI,
@@ -259,22 +288,32 @@ export class OscuraEditor extends CustomEditor {
 		private readonly fullTheme: () => Theme,
 		private readonly chrome: EditorChrome,
 	) {
-		const menuRenderState = { width: 1 };
+		const menuRenderState = { width: 1, query: "" };
 		super(
 			tui,
 			{
 				...editorTheme,
 				selectList: {
 					...editorTheme.selectList,
+					// grok `build_item_lines`: the selected row is text_primary
+					// bold on bg_visual — the ❯ keeps the text colour rather than
+					// the accent — with the description in gray, unbolded, and
+					// fuzzy-matched label chars in fuzzy_accent.
 					selectedText: (text: string) => {
 						const theme = fullTheme();
 						const row = text.replace(/^→ /, "❯ ");
 						const clipped = truncateToWidth(row, menuRenderState.width, "");
-						const columns = clipped.match(/^(❯ .+?)(\s{2,})(\S.*)$/);
+						const columns = clipped.match(/^(❯ )(.+?)(\s{2,}\S.*)?$/);
 						const styled = columns
-							? theme.fg("accent", theme.bold(columns[1] ?? "")) +
-								theme.fg("muted", `${columns[2] ?? ""}${columns[3] ?? ""}`)
-							: theme.fg("accent", theme.bold(clipped));
+							? theme.fg("text", theme.bold(columns[1] ?? "")) +
+								paintMenuLabel(
+									theme,
+									columns[2] ?? "",
+									menuRenderState.query,
+									true,
+								) +
+								theme.fg("muted", columns[3] ?? "")
+							: theme.fg("text", theme.bold(clipped));
 						const padding = " ".repeat(
 							Math.max(0, menuRenderState.width - visibleWidth(clipped)),
 						);
@@ -283,7 +322,8 @@ export class OscuraEditor extends CustomEditor {
 				},
 			},
 			keybindings,
-			{ paddingX: 2 },
+			// grok shows up to MAX_VISIBLE_SUGGESTIONS = 6 dropdown rows.
+			{ paddingX: 2, autocompleteMaxVisible: 6 },
 		);
 		this.menuRenderState = menuRenderState;
 	}
@@ -310,9 +350,11 @@ export class OscuraEditor extends CustomEditor {
 		);
 		if (rows.length === 0) return [];
 
-		const menuMarginWidth = outerMargin > 0 ? outerMargin - 1 : 0;
-		const menuMargin = " ".repeat(menuMarginWidth);
-		const panelWidth = Math.max(1, width - menuMarginWidth * 2);
+		// grok `render_dropdown_chrome`: the panel shares the prompt's outer
+		// pad; borders are bg_highlight rules with the match count in gray one
+		// cell in from the right; the body fills with bg_light.
+		const menuMargin = " ".repeat(outerMargin);
+		const panelWidth = Math.max(1, width - outerMargin * 2);
 		const count = this.autocompleteItemCount();
 		const countText = count === undefined ? "" : String(count);
 		const countWidth = visibleWidth(countText);
@@ -324,11 +366,33 @@ export class OscuraEditor extends CustomEditor {
 			: theme.fg("borderMuted", "─".repeat(panelWidth));
 		const bottom = theme.fg("borderMuted", "─".repeat(panelWidth));
 
+		const query = this.menuRenderState.query;
+		// grok fills the panel body with bg_light; rows carry their own bg
+		// resets (the selected row ends bg_visual with one), so every reset
+		// inside a row falls back to the panel fill rather than the canvas.
+		const panelBg = theme.getBgAnsi("customMessageBg");
 		const body = rows.map((line) => {
-			const clipped = truncateToWidth(line, panelWidth, "");
+			// grok insets item rows one extra column inside the panel
+			// (`dropdown_content_inset` = 1 + hpad); with the editor's own
+			// 2-col padding the ❯ gutter starts 3 cells in.
+			const clipped = truncateToWidth(` ${line}`, panelWidth, "");
+			// Non-selected rows arrive with a plain label (Pi styles only the
+			// description); grok paints it text_primary with the matched run
+			// in fuzzy_accent.
+			const styled = clipped.replace(
+				/^(\s*)([^\s\x1b]+)/,
+				(_row, pad: string, label: string) =>
+					pad + paintMenuLabel(theme, label, query, false),
+			);
 			const padded =
-				clipped + " ".repeat(Math.max(0, panelWidth - visibleWidth(clipped)));
-			return menuMargin + theme.bg("customMessageBg", padded) + menuMargin;
+				styled + " ".repeat(Math.max(0, panelWidth - visibleWidth(clipped)));
+			return (
+				menuMargin +
+				panelBg +
+				padded.replaceAll("\x1b[49m", panelBg) +
+				"\x1b[49m" +
+				menuMargin
+			);
 		});
 
 		return [
@@ -398,6 +462,9 @@ export class OscuraEditor extends CustomEditor {
 		const { outerMargin, contentWidth, promptInset } = editorLayout(width);
 		const baseEditorWidth = Math.max(1, contentWidth - promptInset);
 		this.menuRenderState.width = Math.max(1, baseEditorWidth - 4);
+		// The slash menu filters by the leading token, so it doubles as the
+		// fuzzy-match run for dropdown labels (see paintMenuLabel).
+		this.menuRenderState.query = /^\/\S*/.exec(this.getText())?.[0] ?? "";
 		const lines = super.render(baseEditorWidth);
 		const bottom = borderLineIndex(lines);
 		if (bottom === undefined) return lines;
