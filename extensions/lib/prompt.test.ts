@@ -21,11 +21,15 @@ test("PLACEHOLDER is grok's literal", () => {
 	assert.equal(PLACEHOLDER, "Build anything");
 });
 
-test("stripAnsi removes CSI, OSC (BEL and ST) and APC", () => {
+test("stripAnsi removes CSI, OSC (BEL and ST) and APC (BEL and ST)", () => {
 	assert.equal(stripAnsi("\x1b[35mhi\x1b[0m"), "hi");
 	assert.equal(stripAnsi("a\x1b]11;#030304\x07b"), "ab");
 	assert.equal(stripAnsi("a\x1b]0;title\x1b\\b"), "ab");
 	assert.equal(stripAnsi("a\x1b_payload\x1b\\b"), "ab");
+	// Pi's hardware-cursor marker (`pi-tui` CURSOR_MARKER) is a BEL-terminated
+	// APC; it must be width-free or the cursor row loses columns.
+	assert.equal(stripAnsi("a\x1b_pi:c\x07b"), "ab");
+	assert.equal(visibleWidth("hi\x1b_pi:c\x07"), 2);
 	assert.equal(stripAnsi("plain"), "plain");
 });
 
