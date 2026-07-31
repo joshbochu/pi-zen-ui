@@ -1,8 +1,9 @@
 # Grok TUI fidelity spec
 
-Ground truth extracted from `github.com/xai-org/grok-build` (Rust, `crates/codegen/`).
-grok ships this exact theme itself as `ThemeKind::OscuraMidnight`, so nothing here is
-guesswork — every value below is a literal from the reference implementation.
+Ground truth extracted from `github.com/xai-org/grok-build` (Rust, `crates/codegen/`),
+last verified against `SOURCE_REV 2a28b4a`. grok ships this exact theme itself as
+`ThemeKind::OscuraMidnight`, so nothing here is guesswork — every value below is a
+literal from the reference implementation.
 
 Key source files:
 
@@ -85,22 +86,43 @@ TokyoNight-derived; deriving syntax colors from the purple chrome palette is wro
 
 ## 3. Prompt box (`prompt_widget/mod.rs`)
 
+- The whole UI sits inside an outer pad: 2 columns each side, 1 row top/bottom
+  (`LayoutConfig`: `outer_hpad_left/right = 2`, `outer_vpad = 1`). The prompt box,
+  the turn-status row and the top status bar all share the horizontal pad.
 - Rounded 4-side box: `╭` U+256D `─` U+2500 `╮` U+256E / `│` U+2502 / `╰` U+2570 `╯` U+256F.
-- Border color `prompt_border` idle, `prompt_border_active` when focused (`mod.rs:2901`).
-- Content inset 2 cols (`chrome_pad_left`), prefix `"❯ "` U+276F + space, always 2 cols
-  (`glyphs.rs:23`, `PROMPT_ARROW_WIDTH = 2`), color `accent_user` focused / `gray_dim`
-  unfocused. Never replaced by a spinner.
+- Border color `prompt_border` idle, `prompt_border_active` when focused (`mod.rs:2902`).
+- Content inset: `chrome_pad_left = 2` measured **from the border cell**, so exactly
+  one blank cell separates `│` from the prefix. Prefix `"❯ "` U+276F + space, always
+  2 cols (`glyphs.rs:23`, `PROMPT_ARROW_WIDTH = 2`), color `accent_user` focused /
+  `gray_dim` unfocused, **no bold** (`mod.rs:3008`). Never replaced by a spinner.
 - Prefix overrides: `"! "` `command`, `"~ "` `accent_feedback`, `"# "` `accent_remember`,
   `"? "` `accent_user`.
 - Placeholder `"Build anything"` in `gray`, shown only when the buffer is empty
   **and** the editor is unfocused (`mod.rs:3183`).
-- Top border carries the session title: `" {title} "`, right-aligned, ending 3 cells
-  before `╯`, max `width - 6` (`mod.rs:2979`).
-- Info line sits **on** the bottom border row, right-aligned (`mod.rs:3364`):
-  `" " + [warning + " · "] + model + (" · " + flag)* + " "`.
-  - model text is `"{model_id} ({reasoning_effort})"` (`render.rs:2274`).
-  - separator `" · "` U+00B7 in `gray_dim`; flags in `gray`; `plan` in `accent_plan`,
-    `auto` in `accent_system`.
+- **Unfocused dimming** (`mod.rs:3250`): everything between the side borders is
+  blended 0.66 toward the canvas (`blend_area`, `fg' = bg + (fg-bg)*0.66`), on top
+  of the already-dim prefix and placeholder colours. Text `#E4E4E4` reads `#989898`,
+  the `❯` `#3F4349`, the placeholder `#565960`. The caret is hidden while unfocused.
+- **Chrome captions** (`chrome_caption_style`, `mod.rs:3351`): the session title and
+  the model name share one style — `text_secondary` blended toward the canvas at
+  0.6 alpha focused (`#737374`) / 0.4 unfocused (`#4E4E4E`).
+- Top border carries the session title: `" {title} "`, right-aligned, leaving 2 `─`
+  before `╮`; the padded label may take up to `box width - 6` and is skipped
+  entirely when that budget is under 6 (`mod.rs:2977`).
+- A recognised `/command` token is recoloured in `accent_skill` (PURPLE) while the
+  slash menu is open or the command is registered (`mod.rs:3051`); expected-args
+  ghost text renders in `gray` (not portable — Pi owns completion internals).
+- Info line sits **on** the bottom border row, right-aligned inside the box's
+  content span (its trailing pad space lands 2 cells before `╯`, `mod.rs:3363`):
+  `" " + model + (" · " + flag)* + " "`.
+  - model text is `"{model_id} ({reasoning_effort})"`.
+  - separator `" · "` U+00B7 in `gray_dim` focused, blended 0.6 toward the canvas
+    unfocused; flags in `gray` focused, blended 0.5 unfocused; `plan` in
+    `accent_plan`, `auto` in `accent_system` (no Pi state maps to these).
+  - grok can prepend a **credit-balance** warning (`credit_bar::usage_warning_for_session`,
+    e.g. `"5% usage left"`) — a billing concept with no Pi counterpart.
+  - a right-aligned `multiline` indicator reflects grok's multiline_mode toggle,
+    which Pi does not have.
   - There is **no** context percentage on the prompt border.
 
 ## 4. Turn status row (`turn_status.rs`)
@@ -122,6 +144,10 @@ One row above the prompt, with **one blank gap row** between it and the box
   Pi surfaces events for thinking / responding / running / compacting; the rest are
   modelled in `extensions/lib/phase.ts` but have no Pi event to fire them yet.
 - Timers in `gray`. Token glyph `⇣` U+21E3.
+- Queued hint `" · {n} queued"` in `gray` after the phase timer when held queued
+  input exists (`turn_status.rs:562`; grok adds `" — Enter to send now"` for
+  sendable waits). Pi's `hasPendingMessages()` is a boolean, so the port renders
+  `· queued` without the count.
 - Stop button literal is `"[stop]"`, `gray` at rest, `accent_error` on hover.
   It is **not** `"Esc:stop"`.
 - Startup row: `"⠋ Starting session… 1.0s"` all in `gray_dim`.
@@ -235,6 +261,13 @@ would be dead weight, so they are left out until Pi exposes a render clock.
 | grok feature | why not |
 | --- | --- |
 | sticky top status bar | Pi's `setHeader` is a startup header that scrolls away; the footer is the only persistent top-level region. Branch / cwd / context live in the footer instead. |
+| paste / image chips | `[Pasted: 12 lines]` badges on `paste_bg`, image chips and the preview overlay are textarea elements; Pi's editor owns paste handling. |
+| ghost text | shell-completion / predicted-prompt suffixes and slash arg placeholders paint at the caret inside the textarea; Pi exposes no per-cell hook. |
+| prefix overrides | `"! "` bash / `"~ "` feedback / `"# "` remember / `"? "` history search are grok input modes without Pi equivalents in the editor wrapper. |
+| shortcuts bar | grok's hint row below the prompt is driven by its action registry; only its gap row is mirrored (blank row above the footer). |
+| `multiline` indicator / credit warning | grok's multiline_mode toggle and credit-balance warnings have no Pi counterpart. |
+| queue pane / queued count | grok lists queued prompts in a pane; Pi only exposes `hasPendingMessages()` — a boolean — so the turn-status hint drops the count. |
+| vertical outer padding | grok pads the whole viewport 1 row top/bottom; Pi owns the vertical layout of transcript, widgets and footer. |
 | h3-h6 heading colours | Pi renders a heading's text **before** its `#` marker (proved in `markdown.integration.test.ts`), so the level is known only after the text has been styled. h1 is still separable — Pi styles it as `heading(bold(underline(text)))` while every other level is `heading(bold(text))`, so the underline SGR identifies it — which gives grok's h1/h2 split for free and folds h3-h6 onto h2. |
 | per-row rail wave animation | Pi message components own their own render; per-row repaint at 30fps is not reachable without forking the renderer. |
 | per-entry timestamps | no render hook on the transcript entry. |

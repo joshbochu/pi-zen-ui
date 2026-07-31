@@ -151,21 +151,23 @@ test("overlayRight preserves colour state around the overlay", () => {
 	);
 });
 
-test("titleOnBorder ends 3 columns before the right edge", () => {
+test("titleOnBorder leaves 2 border cells before the corner", () => {
 	const border = "─".repeat(20);
 	const result = titleOnBorder(border, "hello", id);
-	assert.equal(result, `${"─".repeat(10)} hello ${"─".repeat(3)}`);
+	assert.equal(result, `${"─".repeat(11)} hello ${"─".repeat(2)}`);
 	assert.equal(visibleWidth(result), 20);
 });
 
-test("titleOnBorder truncates to border width minus 6", () => {
+test("titleOnBorder truncates the label to box width minus 6", () => {
 	const result = titleOnBorder("─".repeat(12), "session-title", id);
-	assert.equal(result, "─── ses… ───");
+	assert.equal(result, "── sessi… ──");
 	assert.equal(visibleWidth(result), 12);
-	assert.equal(titleOnBorder("─".repeat(9), "session-title", id), "─── … ───");
+	assert.equal(titleOnBorder("─".repeat(10), "session-title", id), "── ses… ──");
 });
 
-test("titleOnBorder gives up on narrow borders and blank titles", () => {
+test("titleOnBorder gives up when the label budget is under 6", () => {
+	// border 9 → box 11 → labelMax 5: grok skips the title entirely.
+	assert.equal(titleOnBorder("─".repeat(9), "session", id), "─".repeat(9));
 	assert.equal(titleOnBorder("────────", "session", id), "────────");
 	assert.equal(titleOnBorder("─".repeat(20), "", id), "─".repeat(20));
 	assert.equal(titleOnBorder("─".repeat(20), "   ", id), "─".repeat(20));
@@ -173,7 +175,7 @@ test("titleOnBorder gives up on narrow borders and blank titles", () => {
 
 test("titleOnBorder styles the rendered title", () => {
 	const result = titleOnBorder("─".repeat(12), "cli", purple);
-	assert.equal(stripAnsi(result), "──── cli ───");
+	assert.equal(stripAnsi(result), "───── cli ──");
 	assert.ok(result.includes("\x1b[35m cli \x1b[0m"));
 });
 

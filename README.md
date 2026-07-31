@@ -40,24 +40,29 @@ pi install ~/dev/pi-oscura-theme
 ## What the skin renders
 
 ```
-⠴ Responding… 1.7s                                       3.1s ⇣8.42k [stop]
+  ⠴ Responding… 1.7s · queued                         3.1s ⇣8.42k [stop]
 
-╭──────────────────────────────────────────────────── pi-oscura-theme ───╮
-│  ❯ Build anything                                                      │
-╰────────────────────────────────── bedrock-claude-opus-5 (xhigh) ───────╯
-⎇ fidelity │ ~/dev/pi-oscura-theme │ 21K / 1.0M
+  ╭─────────────────────────────────────────────── pi-oscura-theme ──╮
+  │ ❯ Build anything                                                 │
+  ╰──────────────────────────────── bedrock-claude-opus-5 (xhigh) ───╯
+
+  ⎇ fidelity │ ~/dev/pi-oscura-theme │ 21K / 1.0M
 ```
 
 - **Turn-status row** — grok's 8-frame braille spinner at 133ms, the phase label
-  (`Thinking…` / `Responding…` / `Running…` / `Compacting…`), phase timer, turn
-  timer, context tokens behind `⇣`, and `[stop]`, with a blank gap row before the
-  prompt. Degrades field-by-field as the terminal narrows.
-- **Prompt box** — rounded frame that brightens `border` → `borderAccent` on
-  focus, session title on the top border, `model (effort)` on the bottom border,
-  and `Build anything` while the buffer is empty and unfocused. The `❯` never
-  turns into a spinner; grok keeps it still.
+  (`Thinking…` / `Responding…` / `Running…` / `Compacting…`), phase timer, a
+  `· queued` hint while steering input waits, turn timer, context tokens behind
+  `⇣`, and `[stop]`, with a blank gap row before the prompt. Degrades
+  field-by-field as the terminal narrows.
+- **Prompt box** — rounded frame inside grok's 2-column outer pad; the border
+  brightens `border` → `borderAccent` on focus and the whole interior fades
+  toward the canvas when focus leaves, grok-style. Session title and
+  `model (effort)` share the focus-graded caption on the borders, a recognised
+  `/command` lights up purple, and `Build anything` shows while the buffer is
+  empty and unfocused. The `❯` never turns into a spinner (and is never bold);
+  grok keeps it still.
 - **Footer** — branch, path, and the context chip on grok's usage gradient
-  (white → lavender → gold → red across 50/75/95%).
+  (white → lavender → gold → red across 50/75/95%), a blank row under the box.
 - **Markdown** — `#` markers hidden at every level, `•` bullets, a three-column
   rule, and fenced code with the fences dropped and a background band behind the
   syntax-highlighted lines. H1 takes grok's white, H2 its lavender; h3-h6 share

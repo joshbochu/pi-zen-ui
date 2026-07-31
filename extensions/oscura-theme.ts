@@ -13,6 +13,7 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import type { EditorTheme, TUI } from "@earendil-works/pi-tui";
 import {
+	blendHex,
 	contextGradientHex,
 	formatContextTokens,
 	formatCwd,
@@ -42,14 +43,17 @@ const THEME_PATH = resolve(
 	"../themes/oscura-midnight.json",
 );
 const STATUS_KEY = "oscura-theme-turn-status";
-const CHROME_MARGIN = 0;
-// Space inside the box before ❯. Glyph stays put; chat text is shifted to the tip.
-const PROMPT_INSET = 2;
+// Spec §3: grok's whole UI sits inside a 2-column outer pad
+// (`LayoutConfig::outer_hpad_left/right = 2`); chrome rows share it.
+const CHROME_MARGIN = 2;
+// Spec §3: `chrome_pad_left = 2` is measured from the border cell itself, so
+// exactly one blank cell separates │ from ❯.
+const PROMPT_INSET = 1;
 const PROMPT_MARKER = "❯ ";
-// Absolute column of the pointer tip / input text start:
-//   CHROME_MARGIN + box border (│) + PROMPT_INSET + "❯ "
-const TEXT_ALIGN_PAD =
-	CHROME_MARGIN + 1 + PROMPT_INSET + visibleWidth(PROMPT_MARKER);
+// Spec §6: grok's transcript rows are [outer pad 2][accent ┃][block pad 2],
+// putting content at column 5. (grok's composer text lands at column 6; the
+// two surfaces are not aligned in grok either.)
+const OUTPUT_PAD = 5;
 const TERMINAL_CANVAS_COLOR = "#030304";
 const SET_TERMINAL_CANVAS = `\x1b]11;${TERMINAL_CANVAS_COLOR}\x07`;
 const RESET_TERMINAL_CANVAS = "\x1b]111\x07";
@@ -60,12 +64,33 @@ const CONTEXT_SEPARATOR = "│";
 // grok's non-Nerd-font git branch icon (`git_info.rs:328`).
 const BRANCH_ICON = "⎇";
 
+// Spec §3 `chrome_caption_style`: the session title and the model name share
+// one caption — text_secondary blended toward the canvas, 0.6 alpha focused,
+// 0.4 unfocused — so both borders read as one chrome.
+const CAPTION_FOCUSED_HEX = blendHex(TERMINAL_CANVAS_COLOR, "#bebebe", 0.6);
+const CAPTION_UNFOCUSED_HEX = blendHex(TERMINAL_CANVAS_COLOR, "#bebebe", 0.4);
+// Spec §3: unfocused, the info-line separator fades to gray_dim at 0.6 and
+// flags to gray at 0.5; focused they stay plain gray_dim / gray.
+const SEPARATOR_UNFOCUSED_HEX = blendHex(TERMINAL_CANVAS_COLOR, "#5e646c", 0.6);
+const FLAG_UNFOCUSED_HEX = blendHex(TERMINAL_CANVAS_COLOR, "#81868f", 0.5);
+// Spec §3: grok blends everything between the side borders 0.66 toward the
+// canvas while the prompt is unfocused (`blend_area`). The ❯ (already
+// gray_dim) and the placeholder (gray) get the same treatment on top.
+const DIM_TEXT_HEX = blendHex(TERMINAL_CANVAS_COLOR, "#e4e4e4", 0.66);
+const DIM_MARKER_HEX = blendHex(TERMINAL_CANVAS_COLOR, "#5e646c", 0.66);
+const DIM_PLACEHOLDER_HEX = blendHex(TERMINAL_CANVAS_COLOR, "#81868f", 0.66);
+
 /** Theme in use, for the markdown skin patched onto message prototypes. */
 let activeTheme: Theme | undefined;
 
-/** Truecolor foreground for a computed hex (context gradient has no theme key). */
-function hexFg(theme: Theme, hex: string, text: string): string {
-	if (theme.getColorMode() !== "truecolor") return theme.fg("text", text);
+/** Truecolor foreground for a computed hex, `fallback` key elsewhere. */
+function hexFg(
+	theme: Theme,
+	hex: string,
+	text: string,
+	fallback: ThemeColor = "text",
+): string {
+	if (theme.getColorMode() !== "truecolor") return theme.fg(fallback, text);
 	const [r, g, b] = hexToRgb(hex);
 	return `\x1b[38;2;${r};${g};${b}m${text}\x1b[39m`;
 }
@@ -95,8 +120,8 @@ function markdownPalette(theme: Theme) {
 /**
  * Pi builds each message component with its own MarkdownTheme and exposes no
  * setter, so the skin is applied on the instance the first time it renders.
- * Also pins outputPad: Pi only exposes 0|1 via settings, but body text has to
- * line up with the tip of ❯ in the composer (TEXT_ALIGN_PAD).
+ * Also pins outputPad: Pi only exposes 0|1 via settings, but grok's transcript
+ * content starts at column 5 (OUTPUT_PAD).
  */
 function skinMessageComponent(Component: { prototype: object }): void {
 	const proto = Component.prototype as {
@@ -113,7 +138,7 @@ function skinMessageComponent(Component: { prototype: object }): void {
 		markdownTheme?: MarkdownThemeLike;
 		__oscuraMarkdown?: boolean;
 	}) => {
-		instance.outputPad = TEXT_ALIGN_PAD;
+		instance.outputPad = OUTPUT_PAD;
 		if (instance.__oscuraMarkdown || !instance.markdownTheme || !activeTheme)
 			return;
 		instance.__oscuraMarkdown = true;
@@ -126,7 +151,7 @@ function skinMessageComponent(Component: { prototype: object }): void {
 	if (typeof proto.setOutputPad === "function") {
 		const original = proto.setOutputPad;
 		proto.setOutputPad = function (this: object, _padding: number) {
-			return original.call(this, TEXT_ALIGN_PAD);
+			return original.call(this, OUTPUT_PAD);
 		};
 	}
 	for (const hook of ["updateContent", "rebuild"] as const) {
@@ -221,10 +246,10 @@ interface EditorChrome {
 	title: () => string;
 	model: () => string;
 	effort: () => string;
-	flags: () => readonly string[];
 }
 
-class OscuraEditor extends CustomEditor {
+/** Exported for the pty-free render harness; Pi only sees the default export. */
+export class OscuraEditor extends CustomEditor {
 	private readonly menuRenderState: { width: number };
 
 	constructor(
@@ -313,6 +338,46 @@ class OscuraEditor extends CustomEditor {
 		];
 	}
 
+	/**
+	 * Spec §3: grok recolours a `/command` token in accent_skill while the
+	 * slash menu is open or the token matches a registered command. Returns
+	 * the painter for the first row, or undefined when nothing qualifies.
+	 */
+	private slashHighlighter(theme: Theme): ((body: string) => string) | undefined {
+		const text = this.getText();
+		if (!text.startsWith("/")) return undefined;
+		const token = /^\/\S+/.exec(text)?.[0];
+		if (!token) return undefined;
+		const internals = this as unknown as {
+			isShowingAutocomplete?: () => boolean;
+			autocompleteProvider?: { commands?: unknown };
+		};
+		const open = internals.isShowingAutocomplete?.() === true;
+		if (!open && !this.isSlashCommand(token)) return undefined;
+		// Escapes (the caret) end the leading plain run, so a mid-token edit
+		// colours only the part before the caret — transient, like grok.
+		return (body) =>
+			body.replace(/^\/[^\s\x1b]*/, (m) =>
+				// customMessageLabel is the theme's PURPLE — grok's accent_skill.
+				theme.fg("customMessageLabel", m),
+			);
+	}
+
+	private isSlashCommand(token: string): boolean {
+		const name = token.slice(1);
+		const provider = (
+			this as unknown as { autocompleteProvider?: { commands?: unknown } }
+		).autocompleteProvider;
+		const commands = provider?.commands;
+		if (!Array.isArray(commands)) return false;
+		return commands.some((command) => {
+			const entry = command as { name?: unknown; value?: unknown };
+			return [entry.name, entry.value].some(
+				(v) => typeof v === "string" && v.replace(/^\//, "") === name,
+			);
+		});
+	}
+
 	override render(width: number): string[] {
 		if (width < 4) return super.render(width);
 
@@ -321,6 +386,14 @@ class OscuraEditor extends CustomEditor {
 		const borderKey: ThemeColor = this.focused ? "borderAccent" : "border";
 		const paintBorder = (text: string) => theme.fg(borderKey, text);
 		this.borderColor = paintBorder;
+		// Spec §3: session title and model share the focus-graded caption.
+		const caption = (s: string) =>
+			hexFg(
+				theme,
+				this.focused ? CAPTION_FOCUSED_HEX : CAPTION_UNFOCUSED_HEX,
+				s,
+				"muted",
+			);
 
 		const { outerMargin, contentWidth, promptInset } = editorLayout(width);
 		const baseEditorWidth = Math.max(1, contentWidth - promptInset);
@@ -334,38 +407,56 @@ class OscuraEditor extends CustomEditor {
 
 		const promptIndent = " ".repeat(promptInset);
 		const markerWidth = visibleWidth(PROMPT_MARKER);
-		// Spec §3: ❯ is never replaced by a spinner; it only dims when unfocused.
+		// Spec §3: ❯ is plain accent_user — grok never bolds it and never swaps
+		// it for a spinner. Unfocused it is gray_dim under the 0.66 content dim.
 		const marker = this.focused
-			? theme.fg("accent", theme.bold(PROMPT_MARKER))
-			: theme.fg("dim", PROMPT_MARKER);
+			? theme.fg("accent", PROMPT_MARKER)
+			: hexFg(theme, DIM_MARKER_HEX, PROMPT_MARKER, "dim");
 		const showPlaceholder = this.getText() === "" && !this.focused;
+		// Spec §3: unfocused content blends 0.66 toward the canvas. Pi's editor
+		// emits plain text plus the inverse-video caret, so stripping escapes
+		// and repainting the row is lossless (and hides the caret, like grok).
+		const dimBody = (s: string) =>
+			hexFg(theme, DIM_TEXT_HEX, stripAnsi(s), "dim");
+		const slashPaint = this.focused ? this.slashHighlighter(theme) : undefined;
 		for (let index = 1; index < bottom; index++) {
 			const line = editorLines[index] ?? "";
 			if (index === 1 && line.startsWith(" ".repeat(markerWidth))) {
-				const body = line.slice(markerWidth);
-				editorLines[index] =
-					promptIndent +
-					marker +
-					(showPlaceholder
-						? placeholderRow(body, PLACEHOLDER, 0, (s) => theme.fg("muted", s))
-						: body);
+				let body = line.slice(markerWidth);
+				if (showPlaceholder) {
+					body = placeholderRow(body, PLACEHOLDER, 0, (s) =>
+						hexFg(theme, DIM_PLACEHOLDER_HEX, s, "muted"),
+					);
+				} else if (!this.focused) {
+					body = dimBody(body);
+				} else if (slashPaint) {
+					body = slashPaint(body);
+				}
+				editorLines[index] = promptIndent + marker + body;
 			} else {
-				editorLines[index] = promptIndent + line;
+				editorLines[index] =
+					promptIndent + (this.focused ? line : dimBody(line));
 			}
 		}
 
-		// Spec §3: model (effort) on the bottom border, right-aligned. No context %.
+		// Spec §3: model (effort) on the bottom border, right-aligned across the
+		// full content span (grok's info rect is the box minus its 2-col pads).
 		const info = infoLine(
 			{
 				model: this.chrome.model(),
 				effort: this.chrome.effort(),
-				flags: this.chrome.flags(),
 			},
-			Math.max(1, Math.floor(contentWidth * 0.55)),
+			Math.max(1, contentWidth - 2),
 			{
-				model: (s) => theme.fg("dim", s),
-				separator: (s) => theme.fg("dim", s),
-				flag: (s) => theme.fg("muted", s),
+				model: caption,
+				separator: (s) =>
+					this.focused
+						? theme.fg("dim", s)
+						: hexFg(theme, SEPARATOR_UNFOCUSED_HEX, s, "dim"),
+				flag: (s) =>
+					this.focused
+						? theme.fg("muted", s)
+						: hexFg(theme, FLAG_UNFOCUSED_HEX, s, "muted"),
 			},
 		);
 		const cornerConnector = paintBorder("─");
@@ -398,12 +489,9 @@ class OscuraEditor extends CustomEditor {
 		};
 		const box = editorLines.map((line, index) => {
 			if (index === 0) {
-				// Spec §3: session title rides the top border, right-aligned.
-				const top = titleOnBorder(
-					fitTopBorder(line),
-					this.chrome.title(),
-					(s) => theme.fg("muted", s),
-				);
+				// Spec §3: session title rides the top border, right-aligned, in
+				// the same caption style as the model name below.
+				const top = titleOnBorder(fitTopBorder(line), this.chrome.title(), caption);
 				return margin + paintBorder("╭") + top + paintBorder("╮") + margin;
 			}
 			if (index < editorBottom) {
@@ -436,6 +524,8 @@ function installTurnStatus(ctx: ExtensionContext): void {
 				render(width: number): string[] {
 					if (!activity.active || width <= 0) return [];
 					const now = Date.now();
+					// The status row shares the prompt's outer pad (spec §3).
+					const margin = width >= 12 ? CHROME_MARGIN : 0;
 					const row = statusRow(
 						{
 							phase: activity.phase,
@@ -444,9 +534,11 @@ function installTurnStatus(ctx: ExtensionContext): void {
 							phaseMs: now - activity.phaseStartedAt,
 							// Spec §4 / glyphs.rs: ⇣ is the context-token count.
 							tokens: contextTokens?.(),
+							// Spec §4: grok's `· N queued` hint; Pi has no count.
+							queued: ctx.hasPendingMessages(),
 							now,
 						},
-						width,
+						width - margin * 2,
 						{
 							spinner: (s) => theme.fg(spinnerColor(activity.phase), s),
 							label: (s) => theme.fg("customMessageText", s),
@@ -455,7 +547,7 @@ function installTurnStatus(ctx: ExtensionContext): void {
 						},
 					);
 					// Spec §4: one blank gap row between the status row and the box.
-					return row === "" ? [] : [row, ""];
+					return row === "" ? [] : [" ".repeat(margin) + row, ""];
 				},
 				invalidate() {},
 				dispose() {
@@ -487,8 +579,9 @@ function installFooter(ctx: ExtensionContext): void {
 					.filter((item) => item !== "")
 					.join(separator);
 
-				const margin = width >= CHROME_MARGIN + 1 ? CHROME_MARGIN : 0;
-				const available = width - margin;
+				// The footer shares the prompt's outer pad on both sides (spec §3).
+				const margin = width >= 12 ? CHROME_MARGIN : 0;
+				const available = width - margin * 2;
 				// Spec §5: context chip `8.5K / 1.0M`, gradient over usage percent.
 				const usage = ctx.getContextUsage();
 				const chip =
@@ -511,7 +604,9 @@ function installFooter(ctx: ExtensionContext): void {
 					chip === ""
 						? leftText
 						: leftText + " ".repeat(gap) + separator + chip;
-				return [" ".repeat(margin) + row];
+				// grok keeps one blank row between the prompt box and the bottom
+				// chrome (`shortcuts_gap`); mirror it above the footer.
+				return ["", " ".repeat(margin) + row];
 			},
 		};
 	});
@@ -581,8 +676,6 @@ export default function oscuraTheme(pi: ExtensionAPI) {
 					title: () => pi.getSessionName() ?? basename(ctx.cwd) ?? "",
 					// Spec §3: grok's info line shows the model id, not its display name.
 					model: () => ctx.model?.id || ctx.model?.name || "no model",
-					// grok flags queued input on the same line (`"3 queued"`).
-					flags: () => (ctx.hasPendingMessages() ? ["queued"] : []),
 					effort: () => pi.getThinkingLevel(),
 				}),
 		);

@@ -187,8 +187,10 @@ export function overlayRight(
 }
 
 /**
- * Session title on the top border (spec §3, `mod.rs:2979`): renders
- * `" {title} "`, ends 3 columns before the right edge, total ≤ width - 6.
+ * Session title on the top border (spec §3, `mod.rs:2977`): renders
+ * `" {title} "`, leaving 2 border cells before `╮`. grok caps the padded
+ * label at box width - 6 (box = border + 2 corners) and skips the title
+ * entirely when that budget is under 6 columns.
  */
 export function titleOnBorder(
 	border: string,
@@ -197,12 +199,12 @@ export function titleOnBorder(
 ): string {
 	const text = title.trim();
 	if (text === "") return border;
-	const maxTitle = visibleWidth(border) - 6 - 2;
-	if (maxTitle <= 0) return border;
+	const labelMax = visibleWidth(border) + 2 - 6;
+	if (labelMax < 6) return border;
 	return overlayRight(
 		border,
-		style(` ${truncateToWidth(text, maxTitle, "…")} `),
-		3,
+		style(` ${truncateToWidth(text, labelMax - 2, "…")} `),
+		2,
 	);
 }
 
