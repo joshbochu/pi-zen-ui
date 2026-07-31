@@ -37,6 +37,12 @@ export interface StatusState {
 	turnMs: number;
 	phaseMs: number;
 	tokens?: number;
+	/**
+	 * Queued (steering) input exists. grok appends `" · {n} queued"` to the
+	 * left group (`turn_status.rs:562`); Pi only exposes a boolean
+	 * (`hasPendingMessages`), so the count is omitted.
+	 */
+	queued?: boolean;
 	now: number;
 }
 
@@ -127,8 +133,15 @@ export function statusRow(
 		state.tokens === undefined
 			? undefined
 			: part(`⇣${formatTurnTokens(state.tokens)}`, paint.timer);
+	// Spec §4: grok's queued hint rides the left group after the phase timer,
+	// in gray. The startup row never shows it.
+	const queued =
+		state.queued && !starting ? part("· queued", paint.timer) : undefined;
 
 	const rightFull = tokens ? [turnTimer, tokens, stop] : [turnTimer, stop];
+	const leftFull = queued
+		? [spinner, label, phaseTimer, queued]
+		: [spinner, label, phaseTimer];
 
 	// Startup shows no turn timer, no tokens and no stop button.
 	const candidates: [Part[], Part[]][] = starting
@@ -138,6 +151,8 @@ export function statusRow(
 				[[spinner], []],
 			]
 		: [
+				[leftFull, rightFull],
+				// The queued hint is the first casualty as the row narrows.
 				[[spinner, label, phaseTimer], rightFull],
 				[
 					[spinner, label, phaseTimer],
