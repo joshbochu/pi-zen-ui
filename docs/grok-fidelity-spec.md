@@ -175,6 +175,9 @@ One row above the prompt, with **one blank gap row** between it and the box
   `· queued` without the count.
 - Stop button literal is `"[stop]"`, `gray` at rest, `accent_error` on hover.
   It is **not** `"Esc:stop"`.
+- When a tool is parked on the user ("waiting on you"), the braille spinner is
+  swapped for a `◆` pulsing at `MONITOR_PULSE_DIVISOR = 8` (≈267 ms per frame);
+  Pi emits no waiting-on-input event, so this stays grok-only (§10).
 - Startup row: `"⠋ Starting session… 1.0s"` all in `gray_dim`.
 
 ### Duration format (`xai-grok-pager-render/src/util.rs:81`)
@@ -242,9 +245,13 @@ With Pi's `outputPad` pinned to 5, grok's accent column lands at index 2.
 - **tool** — bullet `"◆ "` U+25C6 (`gray` collapsed, `gray_bright` expanded);
   rail `accent_error` on error, animated `accent_running` while running,
   else `accent_success`.
-- group header `"◈ "` U+25C8 + `"{n} tool calls & thoughts"` in `gray_bright` bold.
+- group header `"◈ "` U+25C8 in `gray` + `"{n} tool calls & thoughts"` in
+  `gray_bright` bold (`"{n} more"` for plain truncation headers; aggregated
+  verb labels like `"Ran 6 commands"` when the render loop supplies them).
 - hook status markers `"✓ "` U+2713 / `"✗ "` U+2717.
-- timestamps right-aligned, `gray`, 10 cols, `"  %-I:%M %p"`.
+- bash-origin user rows swap the `❯ ` prefix for `"$ "`; cron rows use `"↻  "`.
+- timestamps right-aligned, `gray`, 10 cols, `"  %-I:%M %p"`; hovering shows an
+  extended `HH:mm:ss | MMM DD` variant (mouse — grok-only).
 
 ## 7. Markdown (`parse.rs`, `md_style.rs`)
 
@@ -293,6 +300,8 @@ would be dead weight, so they are left out until Pi exposes a render clock.
 | `multiline` indicator / credit warning | grok's multiline_mode toggle and credit-balance warnings have no Pi counterpart. |
 | queue pane / queued count | grok lists queued prompts in a pane; Pi only exposes `hasPendingMessages()` — a boolean — so the turn-status hint drops the count. |
 | vertical outer padding | grok pads the whole viewport 1 row top/bottom; Pi owns the vertical layout of transcript, widgets and footer. |
+| dropdown fuzzy runs / scrollbar / hover / tags | Pi's `SelectList` exposes no match indices, mouse state, or per-item tags, and renders line-by-line (no scrollbar); the port highlights the query prefix and shows the match count on the top rule instead. |
+| "waiting on you" pulse | grok swaps the status spinner for a `◆` pulsing at 267 ms when a tool is parked on the user; Pi emits no waiting-on-input event. |
 | h3-h6 heading colours | Pi renders a heading's text **before** its `#` marker (proved in `markdown.integration.test.ts`), so the level is known only after the text has been styled. h1 is still separable — Pi styles it as `heading(bold(underline(text)))` while every other level is `heading(bold(text))`, so the underline SGR identifies it — which gives grok's h1/h2 split for free and folds h3-h6 onto h2. |
 | per-row rail wave animation | Pi message components own their own render; per-row repaint at 30fps is not reachable without forking the renderer. |
 | per-entry timestamps | no render hook on the transcript entry. |

@@ -120,6 +120,9 @@ alongside the canvas sequences above.
 No dependencies and no build step. Node strips the TypeScript, and `tsc` runs
 against the peer packages symlinked into `node_modules/`.
 
+`npm test` relies on Node's built-in type stripping: use Node ≥ 22.18 (where
+it is on by default), or pass `--experimental-strip-types` on older 22.x.
+
 ```bash
 npm test        # node --test over extensions/lib/*.test.ts
 npm run typecheck
