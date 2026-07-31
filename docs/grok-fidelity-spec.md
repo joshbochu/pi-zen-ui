@@ -5,6 +5,11 @@ last verified against `SOURCE_REV 2a28b4a`. grok ships this exact theme itself a
 `ThemeKind::OscuraMidnight`, so nothing here is guesswork — every value below is a
 literal from the reference implementation.
 
+Oscura uses these values unchanged by default. Its optional `/oscura` accent
+presets deliberately replace only the purple chrome ramp and purple-tinted
+highlights; the canvas, syntax palette, and semantic status colors remain the
+reference values documented here.
+
 Key source files:
 
 | what | reference path |

@@ -153,6 +153,11 @@ test("contextGradientHex: segment midpoints", () => {
 	assert.equal(contextGradientHex(90), "#e49a69");
 });
 
+test("contextGradientHex accepts a custom accent", () => {
+	assert.equal(contextGradientHex(50, "#88C0D0"), "#88c0d0");
+	assert.equal(contextGradientHex(65, "#88C0D0"), "#88c0d0");
+});
+
 test("contextGradientHex: flat segments stay flat", () => {
 	assert.equal(contextGradientHex(51), "#c4a7e7");
 	assert.equal(contextGradientHex(57.5), "#c4a7e7");

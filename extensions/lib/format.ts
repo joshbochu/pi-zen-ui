@@ -79,27 +79,35 @@ export function blendHex(from: string, to: string, t: number): string {
 	return `#${channel(0)}${channel(1)}${channel(2)}`;
 }
 
-/** Spec §5 `default_breakpoints`, oscura values. */
-const CONTEXT_BREAKPOINTS: readonly (readonly [number, string])[] = [
-	[0, "#E4E4E4"], // text_primary
-	[50, "#C4A7E7"], // accent_user
-	[65, "#C4A7E7"],
-	[75, "#EBD96E"], // warning
-	[85, "#EBD96E"],
-	[95, "#DC5A64"], // accent_error
-];
+/** Spec §5 `default_breakpoints`, with a configurable accent_user. */
+function contextBreakpoints(
+	accent: string,
+): readonly (readonly [number, string])[] {
+	return [
+		[0, "#E4E4E4"], // text_primary
+		[50, accent], // accent_user
+		[65, accent],
+		[75, "#EBD96E"], // warning
+		[85, "#EBD96E"],
+		[95, "#DC5A64"], // accent_error
+	];
+}
 
 /** Context-usage colour for `percent` (0..100), clamped at both ends. */
-export function contextGradientHex(percent: number): string {
+export function contextGradientHex(
+	percent: number,
+	accent = "#C4A7E7",
+): string {
+	const breakpoints = contextBreakpoints(accent);
 	const p = Number.isFinite(percent) ? percent : 0;
-	const first = CONTEXT_BREAKPOINTS[0]!;
-	const last = CONTEXT_BREAKPOINTS.at(-1)!;
+	const first = breakpoints[0]!;
+	const last = breakpoints.at(-1)!;
 	if (p <= first[0]) return blendHex(first[1], first[1], 0);
 	if (p >= last[0]) return blendHex(last[1], last[1], 1);
-	for (let i = 1; i < CONTEXT_BREAKPOINTS.length; i++) {
-		const [hi, hiHex] = CONTEXT_BREAKPOINTS[i]!;
+	for (let i = 1; i < breakpoints.length; i++) {
+		const [hi, hiHex] = breakpoints[i]!;
 		if (p > hi) continue;
-		const [lo, loHex] = CONTEXT_BREAKPOINTS[i - 1]!;
+		const [lo, loHex] = breakpoints[i - 1]!;
 		const span = hi - lo;
 		return blendHex(loHex, hiHex, span === 0 ? 1 : (p - lo) / span);
 	}

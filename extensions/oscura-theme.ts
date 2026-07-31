@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -5,17 +6,18 @@ import {
 	AssistantMessageComponent,
 	CustomEditor,
 	DynamicBorder,
+	Theme,
 	UserMessageComponent,
 	getAgentDir,
 	getSettingsListTheme,
 	type ExtensionAPI,
 	type ExtensionContext,
 	type KeybindingsManager,
-	type Theme,
 	type ThemeColor,
 } from "@earendil-works/pi-coding-agent";
 import {
 	Container,
+	Input,
 	SettingsList,
 	type EditorTheme,
 	type SettingItem,
@@ -30,6 +32,16 @@ import {
 	hexToRgb,
 } from "./lib/format.ts";
 import { grokMarkdownTheme, type MarkdownThemeLike } from "./lib/markdown.ts";
+import {
+	ACCENT_PRESETS,
+	ACCENT_PRESET_LABELS,
+	accentPresetFromLabel,
+	buildAccentThemeColors,
+	effectiveAccentHex,
+	normalizeHexColor,
+	resolveAccentPalette,
+	type ThemeTemplate,
+} from "./lib/palette.ts";
 import { idlePhase, reducePhase, type PhaseSignal } from "./lib/phase.ts";
 import {
 	captionOnBottomBorder,
@@ -47,6 +59,8 @@ import {
 	applyOscuraPreset,
 	loadOscuraSettings,
 	saveOscuraSettings,
+	withAccentPreset,
+	withCustomAccent,
 	withOscuraSetting,
 	type OscuraSettings,
 	type VisibilitySettingKey,
@@ -64,6 +78,9 @@ const THEME_PATH = resolve(
 	"../themes/oscura-midnight.json",
 );
 const SETTINGS_PATH = join(getAgentDir(), "oscura-theme.json");
+const THEME_TEMPLATE = JSON.parse(
+	readFileSync(THEME_PATH, "utf8"),
+) as ThemeTemplate;
 const STATUS_KEY = "oscura-theme-turn-status";
 // Spec §3: grok's whole UI sits inside a 2-column outer pad
 // (`LayoutConfig::outer_hpad_left/right = 2`); chrome rows share it.
@@ -84,7 +101,6 @@ const TERMINAL_CANVAS_COLOR = "#030304";
 const SET_TERMINAL_CANVAS = `\x1b]11;${TERMINAL_CANVAS_COLOR}\x07`;
 const RESET_TERMINAL_CANVAS = "\x1b]111\x07";
 // Spec §9: grok paints the cursor with accent_user via OSC 12, resets via OSC 112.
-const SET_CURSOR_COLOR = "\x1b]12;rgb:c4/a7/e7\x07";
 const RESET_CURSOR_COLOR = "\x1b]112\x07";
 const CONTEXT_SEPARATOR = "│";
 // grok's non-Nerd-font git branch icon (`git_info.rs:328`).
@@ -184,6 +200,19 @@ function hexFg(
 	return `\x1b[38;2;${r};${g};${b}m${text}\x1b[39m`;
 }
 
+function createAccentTheme(settings: OscuraSettings, currentTheme: Theme): Theme {
+	const maps = buildAccentThemeColors(
+		THEME_TEMPLATE,
+		resolveAccentPalette(settings),
+	);
+	return new Theme(
+		maps.foregrounds as ConstructorParameters<typeof Theme>[0],
+		maps.backgrounds as ConstructorParameters<typeof Theme>[1],
+		currentTheme.getColorMode(),
+		{ name: THEME_NAME, sourcePath: THEME_PATH },
+	);
+}
+
 /**
  * grok's heading ramp, as far as Pi makes it reachable (spec §1, §10).
  * Pi reveals a heading's level only after it has already styled the text, so
@@ -192,17 +221,19 @@ function hexFg(
  */
 const HEADING_COLORS: readonly ThemeColor[] = [
 	"text", // h1 TEXT
-	"mdHeading", // h2 PURPLE_BRIGHT, carrying h3-h6 with it
+	"mdHeading", // h2 bright accent, carrying h3-h6 with it
 ];
 
-function markdownPalette(theme: Theme) {
+function markdownPalette(fallbackTheme: Theme) {
+	const current = () => activeTheme ?? fallbackTheme;
 	return {
 		headingLevel: (level: number, s: string) => {
+			const theme = current();
 			const color = HEADING_COLORS[level - 1] ?? "mdHeading";
 			return theme.bold(theme.fg(color, s));
 		},
-		muted: (s: string) => theme.fg("muted", s),
-		codeBg: (s: string) => theme.bg("toolPendingBg", s),
+		muted: (s: string) => current().fg("muted", s),
+		codeBg: (s: string) => current().bg("toolPendingBg", s),
 	};
 }
 
@@ -282,16 +313,25 @@ function spinnerColor(phase: StatusPhase): ThemeColor {
 	return "customMessageText";
 }
 
-function enableTerminalCanvas(): void {
+function cursorColorEscape(hex: string): string {
+	const [r, g, b] = hexToRgb(hex);
+	const pair = (value: number) => value.toString(16).padStart(2, "0");
+	return `\x1b]12;rgb:${pair(r)}/${pair(g)}/${pair(b)}\x07`;
+}
+
+function enableTerminalCanvas(cursorColor: string): void {
 	if (
-		terminalCanvasActive ||
 		!process.stdout.isTTY ||
 		process.env.PI_OSCURA_TERMINAL_CANVAS === "0"
 	) {
 		return;
 	}
 
-	process.stdout.write(SET_TERMINAL_CANVAS + SET_CURSOR_COLOR);
+	if (terminalCanvasActive) {
+		process.stdout.write(cursorColorEscape(cursorColor));
+		return;
+	}
+	process.stdout.write(SET_TERMINAL_CANVAS + cursorColorEscape(cursorColor));
 	terminalCanvasActive = true;
 	resetTerminalCanvasOnExit = () => {
 		if (!terminalCanvasActive) return;
@@ -483,7 +523,7 @@ export class OscuraEditor extends CustomEditor {
 		// colours only the part before the caret — transient, like grok.
 		return (body) =>
 			body.replace(/^\/[^\s\x1b]*/, (m) =>
-				// customMessageLabel is the theme's PURPLE — grok's accent_skill.
+				// customMessageLabel is the selected core accent (grok: PURPLE).
 				theme.fg("customMessageLabel", m),
 			);
 	}
@@ -655,7 +695,7 @@ function installTurnStatus(
 ): void {
 	ctx.ui.setWidget(
 		STATUS_KEY,
-		(tui, theme) => {
+		(tui, _theme) => {
 			const rerender = () => tui.requestRender();
 			requestActivityRender = rerender;
 			const timer = setInterval(() => {
@@ -667,6 +707,7 @@ function installTurnStatus(
 					if (!getSettings().showTurnStatus || !activity.active || width <= 0)
 						return [];
 					const now = Date.now();
+					const theme = ctx.ui.theme;
 					// The status row shares the prompt's outer pad (spec §3).
 					const margin = width >= 12 ? CHROME_MARGIN : 0;
 					const row = statusRow(
@@ -708,13 +749,14 @@ function installFooter(
 	ctx: ExtensionContext,
 	getSettings: () => OscuraSettings,
 ): void {
-	ctx.ui.setFooter((tui, theme, footerData) => {
+	ctx.ui.setFooter((tui, _theme, footerData) => {
 		const unsubscribe = footerData.onBranchChange(() => tui.requestRender());
 		return {
 			dispose: unsubscribe,
 			invalidate() {},
 			render(width: number): string[] {
 				const settings = getSettings();
+				const theme = ctx.ui.theme;
 				const branch = footerData.getGitBranch();
 				const separator = theme.fg("dim", ` ${CONTEXT_SEPARATOR} `);
 
@@ -729,7 +771,10 @@ function installFooter(
 					usage && usage.tokens !== null
 						? hexFg(
 								theme,
-								contextGradientHex(usage.percent ?? 0),
+								contextGradientHex(
+									usage.percent ?? 0,
+									resolveAccentPalette(settings).bright,
+								),
 								`${formatContextTokens(usage.tokens)} / ${formatContextTokens(usage.contextWindow)}`,
 							)
 						: undefined;
@@ -760,9 +805,79 @@ async function openSettingsOverlay(
 	setSettings: (settings: OscuraSettings) => void,
 ): Promise<void> {
 	await ctx.ui.custom<void>(
-		(tui, theme, _keybindings, done) => {
+		(tui, _theme, _keybindings, done) => {
 			let current = getSettings();
+			const presetLabels = ACCENT_PRESETS.map(
+				(preset) => ACCENT_PRESET_LABELS[preset],
+			);
+			const accentInput = (
+				finish: (selectedValue?: string) => void,
+			) => {
+				const input = new Input();
+				input.focused = true;
+				input.handleInput(effectiveAccentHex(current));
+				let validationError = "";
+				input.onSubmit = (value) => {
+					const normalized = normalizeHexColor(value);
+					if (!normalized) {
+						validationError = "Enter a six-digit color such as #88C0D0";
+						tui.requestRender();
+						return;
+					}
+					finish(normalized);
+				};
+				input.onEscape = () => finish(undefined);
+				return {
+					render(width: number) {
+						const theme = ctx.ui.theme;
+						const candidate = normalizeHexColor(input.getValue());
+						const preview = candidate
+							? `${hexFg(theme, candidate, "●")} ${candidate}  ❯ Heading ◆`
+							: theme.fg("error", "● Invalid hex color");
+						return [
+							truncateToWidth(
+								theme.fg("accent", theme.bold(" Custom Accent")),
+								width,
+							),
+							"",
+							...input.render(width),
+							"",
+							truncateToWidth(` ${preview}`, width),
+							...(validationError
+								? [truncateToWidth(theme.fg("error", ` ${validationError}`), width)]
+								: []),
+							truncateToWidth(
+								theme.fg("dim", " Enter apply · Esc cancel"),
+								width,
+							),
+						];
+					},
+					handleInput(data: string) {
+						validationError = "";
+						input.handleInput(data);
+						tui.requestRender();
+					},
+					invalidate() {},
+				};
+			};
+
 			const items: SettingItem[] = [
+				{
+					id: "accent-preset",
+					label: "Color preset",
+					description:
+						"Recolor Oscura chrome while preserving its canvas, syntax, and semantic status colors.",
+					currentValue: ACCENT_PRESET_LABELS[current.accentPreset],
+					values: presetLabels,
+				},
+				{
+					id: "accent-color",
+					label: "Accent color",
+					description:
+						"Enter a custom #RRGGBB color. Core, dim, border, and highlight shades are derived automatically.",
+					currentValue: `● ${effectiveAccentHex(current)}`,
+					submenu: (_currentValue, finish) => accentInput(finish),
+				},
 				...VISIBILITY_SETTING_KEYS.map((key) => ({
 					id: key,
 					label: VISIBILITY_ITEMS[key].label,
@@ -772,15 +887,17 @@ async function openSettingsOverlay(
 				})),
 				{
 					id: "preset-default",
-					label: "Reset to defaults",
-					description: "Show every configurable Oscura chrome region.",
+					label: "Reset visibility",
+					description:
+						"Show every configurable Oscura chrome region without changing the accent.",
 					currentValue: "apply",
 					values: ["apply"],
 				},
 				{
 					id: "preset-minimal",
-					label: "Use Minimal preset",
-					description: "Hide all configurable captions, footer fields, and turn status.",
+					label: "Use Minimal visibility",
+					description:
+						"Hide configurable captions, footer fields, and turn status without changing the accent.",
 					currentValue: "apply",
 					values: ["apply"],
 				},
@@ -788,10 +905,13 @@ async function openSettingsOverlay(
 
 			const container = new Container();
 			container.addChild(
-				new DynamicBorder((text: string) => theme.fg("borderAccent", text)),
+				new DynamicBorder((text: string) =>
+					ctx.ui.theme.fg("borderAccent", text),
+				),
 			);
 			container.addChild({
 				render(width: number) {
+					const theme = ctx.ui.theme;
 					return [
 						truncateToWidth(
 							theme.fg("accent", theme.bold(" Oscura UI Settings")),
@@ -806,8 +926,27 @@ async function openSettingsOverlay(
 				invalidate() {},
 			});
 
+			const baseListTheme = getSettingsListTheme();
+			const listTheme = {
+				...baseListTheme,
+				value: (text: string, selected: boolean) => {
+					const swatch = /^● (#[0-9A-F]{6})$/.exec(text);
+					return swatch?.[1]
+						? `${ctx.ui.theme.fg("accent", "●")} ${baseListTheme.value(swatch[1], selected)}`
+						: baseListTheme.value(text, selected);
+				},
+			};
 			let settingsList: SettingsList;
 			const refreshValues = () => {
+				listTheme.cursor = ctx.ui.theme.fg("accent", "→ ");
+				settingsList.updateValue(
+					"accent-preset",
+					ACCENT_PRESET_LABELS[current.accentPreset],
+				);
+				settingsList.updateValue(
+					"accent-color",
+					`● ${effectiveAccentHex(current)}`,
+				);
 				for (const key of VISIBILITY_SETTING_KEYS) {
 					settingsList.updateValue(key, current[key] ? "shown" : "hidden");
 				}
@@ -829,14 +968,24 @@ async function openSettingsOverlay(
 			settingsList = new SettingsList(
 				items,
 				items.length,
-				getSettingsListTheme(),
+				listTheme,
 				(id, newValue) => {
+					if (id === "accent-preset") {
+						const preset = accentPresetFromLabel(newValue);
+						if (preset) commit(withAccentPreset(current, preset));
+						return;
+					}
+					if (id === "accent-color") {
+						const next = withCustomAccent(current, newValue);
+						if (next) commit(next);
+						return;
+					}
 					if (id === "preset-default") {
-						commit(applyOscuraPreset("default"));
+						commit(applyOscuraPreset("default", current));
 						return;
 					}
 					if (id === "preset-minimal") {
-						commit(applyOscuraPreset("minimal"));
+						commit(applyOscuraPreset("minimal", current));
 						return;
 					}
 					if (VISIBILITY_SETTING_KEYS.includes(id as VisibilitySettingKey)) {
@@ -853,7 +1002,9 @@ async function openSettingsOverlay(
 			);
 			container.addChild(settingsList);
 			container.addChild(
-				new DynamicBorder((text: string) => theme.fg("borderAccent", text)),
+				new DynamicBorder((text: string) =>
+					ctx.ui.theme.fg("borderAccent", text),
+				),
 			);
 
 			return {
@@ -882,8 +1033,29 @@ export default function oscuraTheme(pi: ExtensionAPI) {
 	let activeUi: ExtensionContext["ui"] | undefined;
 	let settings = loadOscuraSettings(SETTINGS_PATH);
 
+	const applyTheme = (ctx: ExtensionContext) => {
+		try {
+			const palette = resolveAccentPalette(settings);
+			const selected = ctx.ui.setTheme(createAccentTheme(settings, ctx.ui.theme));
+			if (!selected.success) throw new Error(selected.error ?? THEME_NAME);
+			activeTheme = ctx.ui.theme;
+			enableTerminalCanvas(palette.bright);
+			ctx.ui.setWorkingIndicator({
+				frames: SPINNER_FRAMES.map((frame) =>
+					ctx.ui.theme.fg("customMessageLabel", frame),
+				),
+				intervalMs: SPINNER_INTERVAL_MS,
+			});
+		} catch (error) {
+			ctx.ui.notify(
+				`Could not apply Oscura accent: ${error instanceof Error ? error.message : String(error)}`,
+				"warning",
+			);
+		}
+	};
+
 	pi.registerCommand("oscura", {
-		description: "Configure Oscura UI visibility",
+		description: "Configure Oscura appearance",
 		handler: async (_args, ctx) => {
 			if (ctx.mode !== "tui") {
 				ctx.ui.notify("/oscura requires TUI mode", "error");
@@ -892,6 +1064,7 @@ export default function oscuraTheme(pi: ExtensionAPI) {
 			await openSettingsOverlay(ctx, () => settings, (next) => {
 				saveOscuraSettings(SETTINGS_PATH, next);
 				settings = next;
+				applyTheme(ctx);
 			});
 		},
 	});
@@ -908,19 +1081,7 @@ export default function oscuraTheme(pi: ExtensionAPI) {
 		if (ctx.mode === "tui") {
 			setTimeout(() => {
 				if (activeUi !== ctx.ui) return;
-				const oscuraTheme = ctx.ui.getTheme(THEME_NAME);
-				const selected = oscuraTheme
-					? ctx.ui.setTheme(oscuraTheme)
-					: {
-							success: false,
-							error: `Theme not found after discovery: ${THEME_NAME}`,
-						};
-				if (!selected.success) {
-					ctx.ui.notify(
-						`Oscura theme unavailable: ${selected.error ?? THEME_NAME}`,
-						"warning",
-					);
-				}
+				applyTheme(ctx);
 			}, 0);
 		}
 		return { themePaths: [THEME_PATH] };
@@ -929,9 +1090,8 @@ export default function oscuraTheme(pi: ExtensionAPI) {
 	pi.on("session_start", (_event, ctx) => {
 		if (ctx.mode !== "tui") return;
 		activeUi = ctx.ui;
-		activeTheme = ctx.ui.theme;
 		contextTokens = () => ctx.getContextUsage()?.tokens ?? undefined;
-		enableTerminalCanvas();
+		applyTheme(ctx);
 		if (process.env.PI_OSCURA_KEEP_POWERBAR !== "1") {
 			ctx.ui.setWidget("powerbar", undefined);
 		}
@@ -941,12 +1101,6 @@ export default function oscuraTheme(pi: ExtensionAPI) {
 		ctx.ui.setWorkingVisible(false);
 		// Spec §6: grok's collapsed thinking label is "Thought"; ◆ is the tool bullet.
 		ctx.ui.setHiddenThinkingLabel("Thought");
-		ctx.ui.setWorkingIndicator({
-			frames: SPINNER_FRAMES.map((frame) =>
-				ctx.ui.theme.fg("customMessageLabel", frame),
-			),
-			intervalMs: SPINNER_INTERVAL_MS,
-		});
 
 		installTurnStatus(ctx, () => settings);
 		installFooter(ctx, () => settings);

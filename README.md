@@ -58,20 +58,20 @@ pi install ~/dev/pi-oscura-theme
   brightens `border` → `borderAccent` on focus and the whole interior fades
   toward the canvas when focus leaves, grok-style. Session title and
   `model • effort` share the focus-graded caption on the borders, a recognised
-  `/command` lights up purple, and `Build anything` shows while the buffer is
-  empty and unfocused. The `❯` never turns into a spinner (and is never bold);
-  grok keeps it still.
+  `/command` lights up in the selected accent, and `Build anything` shows while
+  the buffer is empty and unfocused. The `❯` never turns into a spinner (and is
+  never bold); grok keeps it still.
 - **Completion dropdown** — grok's panel chrome above the box: `bg_highlight`
   rules with the match count riding the top rule, a `bg_light` body, up to 6
-  rows with the typed prefix highlighted in lavender, and the selected row
-  bold on `bg_visual` behind a still `❯`.
+  rows with the typed prefix highlighted in the selected accent, and the
+  selected row bold on `bg_visual` behind a still `❯`.
 - **Footer** — branch, path, and the context chip on grok's usage gradient
-  (white → lavender → gold → red across 50/75/95%), a blank row under the box.
+  (white → accent → gold → red across 50/75/95%), a blank row under the box.
 - **Markdown** — `#` markers hidden at every level, `•` bullets, a three-column
   rule, and fenced code with the fences dropped and a background band behind the
-  syntax-highlighted lines. H1 takes grok's white, H2 its lavender; h3-h6 share
-  the lavender because Pi hands over a heading's level only after it has styled
-  the text.
+  syntax-highlighted lines. H1 takes grok's white, H2 the selected accent;
+  h3-h6 share that accent because Pi hands over a heading's level only after it
+  has styled the text.
 
 ## Preview
 
@@ -92,13 +92,33 @@ Pass normal Pi arguments after the launcher:
 
 Set `PI_OSCURA_ALT_SCREEN=0` to keep Pi in normal terminal scrollback.
 
-## `/oscura` visibility settings
+## `/oscura` appearance settings
 
 Run `/oscura` in Pi to open the Oscura UI Settings overlay. Use the configured Pi
 selection keys (arrow keys by default) to navigate, Enter or Space to change a
 setting, and Escape to close. Changes apply immediately.
 
-The overlay controls each region independently:
+### Accent colors
+
+**Color preset** cycles between:
+
+- **Oscura** — the original lavender ramp (`#C4A7E7`, `#9B7ECE`, `#6E5A9A`)
+- **Nord Frost** — Nord's blue ramp (`#88C0D0`, `#81A1C1`, `#5E81AC`)
+- **Custom** — the last custom accent entered
+
+**Accent color** displays a colored swatch and the effective hex value. Select it
+to open the `#RRGGBB` editor; its swatch previews the value while you type, Enter
+applies it, and Escape cancels. A custom bright accent automatically derives
+coherent core, dim, active-border, selected-row, and highlight shades.
+
+Accent customization recolors the prompt arrow and cursor, headings, labels and
+spinner, active borders, selected backgrounds, completion matches, thinking
+accent, and context gradient. It deliberately keeps Oscura's near-black canvas,
+syntax highlighting, and semantic success/error/warning colors.
+
+### Visibility
+
+The overlay also controls each region independently:
 
 - session title on the top border
 - cwd fallback when an unnamed session has no explicit title
@@ -108,9 +128,9 @@ The overlay controls each region independently:
 - context usage in the footer
 - turn-status row above the editor
 
-All regions are shown by default. **Reset to defaults** restores that state.
-**Use Minimal preset** hides all seven configurable regions; each toggle can
-still be changed afterward.
+All regions are shown by default. **Reset visibility** restores that state.
+**Use Minimal visibility** hides all seven configurable regions; neither action
+changes the selected accent, and each toggle can still be changed afterward.
 
 Settings are global and persist across Pi restarts in Oscura's extension-owned
 `oscura-theme.json` under Pi's agent directory—normally
@@ -119,8 +139,9 @@ Settings are global and persist across Pi restarts in Oscura's extension-owned
 safely fall back to the defaults. Oscura does not add private keys to Pi's main
 `settings.json`.
 
-The completion dropdown, placeholder, prompt marker, terminal canvas, and
-markdown skin are not controlled by `/oscura`.
+The completion dropdown, prompt marker, headings, and context gradient inherit
+the selected accent. Their structure, the placeholder, terminal canvas color,
+and markdown layout are not configurable.
 
 ## Terminal canvas
 
@@ -140,7 +161,8 @@ printf '\e]111\a'
 
 ## Notes
 
-The extension applies `oscura-midnight` in memory at TUI startup. Set `PI_OSCURA_KEEP_POWERBAR=1` to retain pi-powerbar's widget.
+The extension builds `oscura-midnight` in memory at TUI startup using the saved
+accent selection. Set `PI_OSCURA_KEEP_POWERBAR=1` to retain pi-powerbar's widget.
 
 The cursor is set to the theme's accent with OSC 12 and restored with OSC 112,
 alongside the canvas sequences above.
