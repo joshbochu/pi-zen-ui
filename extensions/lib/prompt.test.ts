@@ -4,6 +4,7 @@ import test from "node:test";
 import {
 	PLACEHOLDER,
 	captionOnBottomBorder,
+	editorRenderWidth,
 	infoLine,
 	overlayRight,
 	placeholderRow,
@@ -20,6 +21,30 @@ const grey = (s: string) => `\x1b[90m${s}\x1b[0m`;
 
 test("PLACEHOLDER is grok's literal", () => {
 	assert.equal(PLACEHOLDER, "Build anything");
+});
+
+test("editorRenderWidth reclaims Pi's symmetric right padding", () => {
+	const contentWidth = 74;
+	const promptInset = 1;
+	const editorPadding = 2;
+	const markerWidth = 2;
+	const sourceWidth = editorRenderWidth(
+		contentWidth,
+		promptInset,
+		editorPadding,
+	);
+
+	// Pi removes paddingX from both sides to find its wrapping width. The
+	// widened source therefore leaves exactly Grok's content budget after the
+	// left inset and `❯ `, rather than wrapping two columns early.
+	assert.equal(sourceWidth, 75);
+	assert.equal(
+		sourceWidth - editorPadding * 2,
+		contentWidth - promptInset - markerWidth,
+	);
+	// Adding the inset back makes the rendered row overhang by precisely the
+	// right pad that the outer frame clips.
+	assert.equal(sourceWidth + promptInset - contentWidth, editorPadding);
 });
 
 test("stripAnsi removes CSI, OSC (BEL and ST) and APC (BEL and ST)", () => {

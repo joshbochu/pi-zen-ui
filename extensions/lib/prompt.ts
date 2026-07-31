@@ -7,6 +7,20 @@
 /** grok's empty-buffer placeholder (`prompt_widget/mod.rs:3183`). */
 export const PLACEHOLDER = "Build anything";
 
+/**
+ * Width passed to Pi's symmetrically padded editor before the framed row clips
+ * its right pad. Grok has a left inset but no spare cell between a full text
+ * row and the right border; rendering `rightPad` columns wide preserves Pi's
+ * left padding while reclaiming those columns from the right.
+ */
+export function editorRenderWidth(
+	contentWidth: number,
+	promptInset: number,
+	rightPad: number,
+): number {
+	return Math.max(1, contentWidth - promptInset + rightPad);
+}
+
 /** Separator between info-line pieces: U+00B7 with single spaces. */
 const SEPARATOR = " · ";
 

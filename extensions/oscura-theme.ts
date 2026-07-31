@@ -33,6 +33,7 @@ import { grokMarkdownTheme, type MarkdownThemeLike } from "./lib/markdown.ts";
 import { idlePhase, reducePhase, type PhaseSignal } from "./lib/phase.ts";
 import {
 	captionOnBottomBorder,
+	editorRenderWidth,
 	infoLine,
 	placeholderRow,
 	PLACEHOLDER,
@@ -71,6 +72,10 @@ const CHROME_MARGIN = 2;
 // exactly one blank cell separates │ from ❯.
 const PROMPT_INSET = 1;
 const PROMPT_MARKER = "❯ ";
+// Pi's Editor only supports symmetric padding. We keep its 2-column left pad
+// for the prefix substitution, then render wide enough to clip the matching
+// right pad at our frame instead of wrapping two columns before grok does.
+const EDITOR_PADDING_X = 2;
 // Spec §6: grok's transcript rows are [outer pad 2][accent ┃][block pad 2],
 // putting content at column 5. (grok's composer text lands at column 6; the
 // two surfaces are not aligned in grok either.)
@@ -379,13 +384,13 @@ export class OscuraEditor extends CustomEditor {
 			},
 			keybindings,
 			// grok shows up to MAX_VISIBLE_SUGGESTIONS = 6 dropdown rows.
-			{ paddingX: 2, autocompleteMaxVisible: 6 },
+			{ paddingX: EDITOR_PADDING_X, autocompleteMaxVisible: 6 },
 		);
 		this.menuRenderState = menuRenderState;
 	}
 
 	override setPaddingX(_padding: number): void {
-		super.setPaddingX(2);
+		super.setPaddingX(EDITOR_PADDING_X);
 	}
 
 	private autocompleteItemCount(): number | undefined {
@@ -516,8 +521,19 @@ export class OscuraEditor extends CustomEditor {
 			);
 
 		const { outerMargin, contentWidth, promptInset } = editorLayout(width);
-		const baseEditorWidth = Math.max(1, contentWidth - promptInset);
-		this.menuRenderState.width = Math.max(1, baseEditorWidth - 4);
+		// Pi reserves EDITOR_PADDING_X on both sides. Request the right pad as
+		// extra source width, then let fit() clip it after the left inset/prefix
+		// substitution. This preserves the left geometry while giving the text
+		// Grok's full width through the cell immediately before the right border.
+		const baseEditorWidth = editorRenderWidth(
+			contentWidth,
+			promptInset,
+			EDITOR_PADDING_X,
+		);
+		this.menuRenderState.width = Math.max(
+			1,
+			baseEditorWidth - EDITOR_PADDING_X * 2,
+		);
 		// The slash menu filters by the leading token, so it doubles as the
 		// fuzzy-match run for dropdown labels (see paintMenuLabel).
 		this.menuRenderState.query = /^\/\S*/.exec(this.getText())?.[0] ?? "";
