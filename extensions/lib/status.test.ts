@@ -149,6 +149,36 @@ test("statusRow: zero tokens still render", () => {
 	assert.ok(statusRow({ ...thinking, tokens: 0 }, 40, plain).includes("⇣0"));
 });
 
+test("statusRow: queued hint follows the phase timer", () => {
+	const row = statusRow({ ...thinking, queued: true }, 60, plain);
+	assert.equal(
+		row,
+		`⠙ Thinking… 5.2s · queued${" ".repeat(17)}1m2s ⇣8.42k [stop]`,
+	);
+	assert.equal(cols(row), 60);
+});
+
+test("statusRow: queued hint is dropped first as the row narrows", () => {
+	const queued = { ...thinking, queued: true };
+	assert.equal(
+		statusRow(queued, 44, plain),
+		"⠙ Thinking… 5.2s · queued 1m2s ⇣8.42k [stop]",
+	);
+	assert.equal(
+		statusRow(queued, 43, plain),
+		`⠙ Thinking… 5.2s${" ".repeat(9)}1m2s ⇣8.42k [stop]`,
+	);
+});
+
+test("statusRow: startup row ignores the queued hint", () => {
+	const row = statusRow(
+		{ ...thinking, phase: "starting", queued: true },
+		60,
+		plain,
+	);
+	assert.equal(row, "⠙ Starting session… 5.2s");
+});
+
 test("statusRow: retrying uses the attempt number", () => {
 	const row = statusRow(
 		{ ...thinking, phase: "retrying", attempt: 3 },

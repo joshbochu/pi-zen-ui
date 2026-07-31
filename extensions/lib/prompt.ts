@@ -10,12 +10,14 @@ export const PLACEHOLDER = "Build anything";
 /** Separator between info-line pieces: U+00B7 with single spaces. */
 const SEPARATOR = " · ";
 
-// Ported from extensions/oscura-theme.ts: CSI, OSC (BEL or ST terminated), APC.
+// CSI, OSC and APC, each BEL- or ST-terminated. APC must accept BEL because
+// Pi's hardware-cursor marker is `\x1b_pi:c\x07` (`pi-tui` CURSOR_MARKER);
+// counting it as text used to shrink the cursor row by its 7 code units.
 const ANSI = new RegExp(
 	[
 		/\x1b\[[0-?]*[ -/]*[@-~]/.source,
 		/\x1b\][^\x07]*(?:\x07|\x1b\\)/.source,
-		/\x1b_[\s\S]*?\x1b\\/.source,
+		/\x1b_[^\x07]*(?:\x07|\x1b\\)/.source,
 	].join("|"),
 	"g",
 );
@@ -185,8 +187,10 @@ export function overlayRight(
 }
 
 /**
- * Session title on the top border (spec §3, `mod.rs:2979`): renders
- * `" {title} "`, ends 3 columns before the right edge, total ≤ width - 6.
+ * Session title on the top border (spec §3, `mod.rs:2977`): renders
+ * `" {title} "`, leaving 2 border cells before `╮`. grok caps the padded
+ * label at box width - 6 (box = border + 2 corners) and skips the title
+ * entirely when that budget is under 6 columns.
  */
 export function titleOnBorder(
 	border: string,
@@ -195,12 +199,12 @@ export function titleOnBorder(
 ): string {
 	const text = title.trim();
 	if (text === "") return border;
-	const maxTitle = visibleWidth(border) - 6 - 2;
-	if (maxTitle <= 0) return border;
+	const labelMax = visibleWidth(border) + 2 - 6;
+	if (labelMax < 6) return border;
 	return overlayRight(
 		border,
-		style(` ${truncateToWidth(text, maxTitle, "…")} `),
-		3,
+		style(` ${truncateToWidth(text, labelMax - 2, "…")} `),
+		2,
 	);
 }
 

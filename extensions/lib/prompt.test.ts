@@ -21,11 +21,15 @@ test("PLACEHOLDER is grok's literal", () => {
 	assert.equal(PLACEHOLDER, "Build anything");
 });
 
-test("stripAnsi removes CSI, OSC (BEL and ST) and APC", () => {
+test("stripAnsi removes CSI, OSC (BEL and ST) and APC (BEL and ST)", () => {
 	assert.equal(stripAnsi("\x1b[35mhi\x1b[0m"), "hi");
 	assert.equal(stripAnsi("a\x1b]11;#030304\x07b"), "ab");
 	assert.equal(stripAnsi("a\x1b]0;title\x1b\\b"), "ab");
 	assert.equal(stripAnsi("a\x1b_payload\x1b\\b"), "ab");
+	// Pi's hardware-cursor marker (`pi-tui` CURSOR_MARKER) is a BEL-terminated
+	// APC; it must be width-free or the cursor row loses columns.
+	assert.equal(stripAnsi("a\x1b_pi:c\x07b"), "ab");
+	assert.equal(visibleWidth("hi\x1b_pi:c\x07"), 2);
 	assert.equal(stripAnsi("plain"), "plain");
 });
 
@@ -147,21 +151,23 @@ test("overlayRight preserves colour state around the overlay", () => {
 	);
 });
 
-test("titleOnBorder ends 3 columns before the right edge", () => {
+test("titleOnBorder leaves 2 border cells before the corner", () => {
 	const border = "─".repeat(20);
 	const result = titleOnBorder(border, "hello", id);
-	assert.equal(result, `${"─".repeat(10)} hello ${"─".repeat(3)}`);
+	assert.equal(result, `${"─".repeat(11)} hello ${"─".repeat(2)}`);
 	assert.equal(visibleWidth(result), 20);
 });
 
-test("titleOnBorder truncates to border width minus 6", () => {
+test("titleOnBorder truncates the label to box width minus 6", () => {
 	const result = titleOnBorder("─".repeat(12), "session-title", id);
-	assert.equal(result, "─── ses… ───");
+	assert.equal(result, "── sessi… ──");
 	assert.equal(visibleWidth(result), 12);
-	assert.equal(titleOnBorder("─".repeat(9), "session-title", id), "─── … ───");
+	assert.equal(titleOnBorder("─".repeat(10), "session-title", id), "── ses… ──");
 });
 
-test("titleOnBorder gives up on narrow borders and blank titles", () => {
+test("titleOnBorder gives up when the label budget is under 6", () => {
+	// border 9 → box 11 → labelMax 5: grok skips the title entirely.
+	assert.equal(titleOnBorder("─".repeat(9), "session", id), "─".repeat(9));
 	assert.equal(titleOnBorder("────────", "session", id), "────────");
 	assert.equal(titleOnBorder("─".repeat(20), "", id), "─".repeat(20));
 	assert.equal(titleOnBorder("─".repeat(20), "   ", id), "─".repeat(20));
@@ -169,7 +175,7 @@ test("titleOnBorder gives up on narrow borders and blank titles", () => {
 
 test("titleOnBorder styles the rendered title", () => {
 	const result = titleOnBorder("─".repeat(12), "cli", purple);
-	assert.equal(stripAnsi(result), "──── cli ───");
+	assert.equal(stripAnsi(result), "───── cli ──");
 	assert.ok(result.includes("\x1b[35m cli \x1b[0m"));
 });
 
