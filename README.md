@@ -92,6 +92,36 @@ Pass normal Pi arguments after the launcher:
 
 Set `PI_OSCURA_ALT_SCREEN=0` to keep Pi in normal terminal scrollback.
 
+## `/oscura` visibility settings
+
+Run `/oscura` in Pi to open the Oscura UI Settings overlay. Use the configured Pi
+selection keys (arrow keys by default) to navigate, Enter or Space to change a
+setting, and Escape to close. Changes apply immediately.
+
+The overlay controls each region independently:
+
+- session title on the top border
+- cwd fallback when an unnamed session has no explicit title
+- model and thinking-effort caption on the lower border
+- Git branch in the footer
+- current directory in the footer
+- context usage in the footer
+- turn-status row above the editor
+
+All regions are shown by default. **Reset to defaults** restores that state.
+**Use Minimal preset** hides all seven configurable regions; each toggle can
+still be changed afterward.
+
+Settings are global and persist across Pi restarts in Oscura's extension-owned
+`oscura-theme.json` under Pi's agent directory—normally
+`~/.pi/agent/oscura-theme.json`, or the directory selected by
+`PI_CODING_AGENT_DIR`. Writes are atomic, and missing or malformed settings
+safely fall back to the defaults. Oscura does not add private keys to Pi's main
+`settings.json`.
+
+The completion dropdown, placeholder, prompt marker, terminal canvas, and
+markdown skin are not controlled by `/oscura`.
+
 ## Terminal canvas
 
 The skin temporarily sets the terminal default background to `#030304` with OSC 11, then restores the terminal profile default with OSC 111 when Pi shuts down. Terminals without dynamic-color support ignore these sequences.
@@ -133,7 +163,7 @@ module so it can be tested without booting a TUI. `extensions/oscura-theme.ts`
 is the wiring layer, verified by running Pi under a pty and inspecting the
 emitted frames.
 
-## Settings
+## Recommended Pi settings
 
 Recommended Pi settings:
 

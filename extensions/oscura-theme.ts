@@ -1,17 +1,27 @@
 import { homedir } from "node:os";
-import { basename, dirname, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
 	AssistantMessageComponent,
 	CustomEditor,
+	DynamicBorder,
 	UserMessageComponent,
+	getAgentDir,
+	getSettingsListTheme,
 	type ExtensionAPI,
 	type ExtensionContext,
 	type KeybindingsManager,
 	type Theme,
 	type ThemeColor,
 } from "@earendil-works/pi-coding-agent";
-import type { EditorTheme, TUI } from "@earendil-works/pi-tui";
+import {
+	Container,
+	SettingsList,
+	type EditorTheme,
+	type SettingItem,
+	type TUI,
+} from "@earendil-works/pi-tui";
+import { composeFooterRow, resolveSessionTitle } from "./lib/chrome.ts";
 import {
 	blendHex,
 	contextGradientHex,
@@ -22,6 +32,7 @@ import {
 import { grokMarkdownTheme, type MarkdownThemeLike } from "./lib/markdown.ts";
 import { idlePhase, reducePhase, type PhaseSignal } from "./lib/phase.ts";
 import {
+	captionOnBottomBorder,
 	infoLine,
 	placeholderRow,
 	PLACEHOLDER,
@@ -30,6 +41,15 @@ import {
 	truncateToWidth,
 	visibleWidth,
 } from "./lib/prompt.ts";
+import {
+	VISIBILITY_SETTING_KEYS,
+	applyOscuraPreset,
+	loadOscuraSettings,
+	saveOscuraSettings,
+	withOscuraSetting,
+	type OscuraSettings,
+	type VisibilitySettingKey,
+} from "./lib/settings.ts";
 import {
 	SPINNER_FRAMES,
 	SPINNER_INTERVAL_MS,
@@ -42,6 +62,7 @@ const THEME_PATH = resolve(
 	dirname(fileURLToPath(import.meta.url)),
 	"../themes/oscura-midnight.json",
 );
+const SETTINGS_PATH = join(getAgentDir(), "oscura-theme.json");
 const STATUS_KEY = "oscura-theme-turn-status";
 // Spec §3: grok's whole UI sits inside a 2-column outer pad
 // (`LayoutConfig::outer_hpad_left/right = 2`); chrome rows share it.
@@ -63,6 +84,40 @@ const RESET_CURSOR_COLOR = "\x1b]112\x07";
 const CONTEXT_SEPARATOR = "│";
 // grok's non-Nerd-font git branch icon (`git_info.rs:328`).
 const BRANCH_ICON = "⎇";
+
+const VISIBILITY_ITEMS: Record<
+	VisibilitySettingKey,
+	{ label: string; description: string }
+> = {
+	showSessionTitle: {
+		label: "Show session title",
+		description: "Show an explicit session name on the input box's top border.",
+	},
+	useCwdAsSessionTitle: {
+		label: "Use cwd title fallback",
+		description: "When no session name is set, use the current directory name.",
+	},
+	showModelCaption: {
+		label: "Show model / effort",
+		description: "Show the model id and thinking effort on the lower border.",
+	},
+	showGitBranch: {
+		label: "Show Git branch",
+		description: "Show the current Git branch in the footer.",
+	},
+	showCurrentDirectory: {
+		label: "Show current directory",
+		description: "Show the current working directory in the footer.",
+	},
+	showContextUsage: {
+		label: "Show context usage",
+		description: "Show used and available context tokens in the footer.",
+	},
+	showTurnStatus: {
+		label: "Show turn-status row",
+		description: "Show phase, timers, queue state, tokens, and stop hint above the editor.",
+	},
+};
 
 // Spec §3 `chrome_caption_style`: the session title and the model name share
 // one caption — text_secondary blended toward the canvas, 0.6 alpha focused,
@@ -273,6 +328,7 @@ function borderLineIndex(lines: string[]): number | undefined {
 
 interface EditorChrome {
 	title: () => string;
+	showModelCaption: () => boolean;
 	model: () => string;
 	effort: () => string;
 }
@@ -508,33 +564,33 @@ export class OscuraEditor extends CustomEditor {
 
 		// Spec §3: model (effort) on the bottom border, right-aligned across the
 		// full content span (grok's info rect is the box minus its 2-col pads).
-		const info = infoLine(
-			{
-				model: this.chrome.model(),
-				effort: this.chrome.effort(),
-			},
-			Math.max(1, contentWidth - 2),
-			{
-				model: caption,
-				separator: (s) =>
-					this.focused
-						? theme.fg("dim", s)
-						: hexFg(theme, SEPARATOR_UNFOCUSED_HEX, s, "dim"),
-				flag: (s) =>
-					this.focused
-						? theme.fg("muted", s)
-						: hexFg(theme, FLAG_UNFOCUSED_HEX, s, "muted"),
-			},
-		);
+		const info = this.chrome.showModelCaption()
+			? infoLine(
+					{
+						model: this.chrome.model(),
+						effort: this.chrome.effort(),
+					},
+					Math.max(1, contentWidth - 2),
+					{
+						model: caption,
+						separator: (s) =>
+							this.focused
+								? theme.fg("dim", s)
+								: hexFg(theme, SEPARATOR_UNFOCUSED_HEX, s, "dim"),
+						flag: (s) =>
+							this.focused
+								? theme.fg("muted", s)
+								: hexFg(theme, FLAG_UNFOCUSED_HEX, s, "muted"),
+					},
+				)
+			: "";
 		const cornerConnector = paintBorder("─");
-		const borderWidth = Math.max(
-			0,
-			contentWidth - visibleWidth(info) - visibleWidth(cornerConnector),
+		editorLines[bottom] = captionOnBottomBorder(
+			editorLines[bottom] ?? "",
+			info,
+			contentWidth,
+			cornerConnector,
 		);
-		editorLines[bottom] =
-			truncateToWidth(editorLines[bottom] ?? "", borderWidth, "") +
-			info +
-			cornerConnector;
 
 		const editorBottom = editorLines.length - 1;
 		const margin = " ".repeat(outerMargin);
@@ -577,19 +633,23 @@ export class OscuraEditor extends CustomEditor {
 	}
 }
 
-function installTurnStatus(ctx: ExtensionContext): void {
+function installTurnStatus(
+	ctx: ExtensionContext,
+	getSettings: () => OscuraSettings,
+): void {
 	ctx.ui.setWidget(
 		STATUS_KEY,
 		(tui, theme) => {
 			const rerender = () => tui.requestRender();
 			requestActivityRender = rerender;
 			const timer = setInterval(() => {
-				if (activity.active) rerender();
+				if (activity.active && getSettings().showTurnStatus) rerender();
 			}, SPINNER_INTERVAL_MS);
 
 			return {
 				render(width: number): string[] {
-					if (!activity.active || width <= 0) return [];
+					if (!getSettings().showTurnStatus || !activity.active || width <= 0)
+						return [];
 					const now = Date.now();
 					// The status row shares the prompt's outer pad (spec §3).
 					const margin = width >= 12 ? CHROME_MARGIN : 0;
@@ -628,29 +688,27 @@ function installTurnStatus(ctx: ExtensionContext): void {
 	);
 }
 
-function installFooter(ctx: ExtensionContext): void {
+function installFooter(
+	ctx: ExtensionContext,
+	getSettings: () => OscuraSettings,
+): void {
 	ctx.ui.setFooter((tui, theme, footerData) => {
 		const unsubscribe = footerData.onBranchChange(() => tui.requestRender());
 		return {
 			dispose: unsubscribe,
 			invalidate() {},
 			render(width: number): string[] {
-				// Spec §3: grok's top bar reads `{branch_icon} {branch}` then the path,
-				// as separate items rather than `path (branch)`.
+				const settings = getSettings();
 				const branch = footerData.getGitBranch();
 				const separator = theme.fg("dim", ` ${CONTEXT_SEPARATOR} `);
-				const left = [
-					branch ? theme.fg("muted", `${BRANCH_ICON} ${branch}`) : "",
-					theme.fg("dim", formatCwd(ctx.cwd, homedir())),
-				]
-					.filter((item) => item !== "")
-					.join(separator);
 
 				// The footer shares the prompt's outer pad on both sides (spec §3).
 				const margin = width >= 12 ? CHROME_MARGIN : 0;
 				const available = width - margin * 2;
 				// Spec §5: context chip `8.5K / 1.0M`, gradient over usage percent.
-				const usage = ctx.getContextUsage();
+				const usage = settings.showContextUsage
+					? ctx.getContextUsage()
+					: undefined;
 				const chip =
 					usage && usage.tokens !== null
 						? hexFg(
@@ -658,19 +716,20 @@ function installFooter(ctx: ExtensionContext): void {
 								contextGradientHex(usage.percent ?? 0),
 								`${formatContextTokens(usage.tokens)} / ${formatContextTokens(usage.contextWindow)}`,
 							)
-						: "";
-				const chipWidth =
-					chip === "" ? 0 : visibleWidth(chip) + visibleWidth(separator);
-				const leftText = truncateToWidth(
-					left,
-					Math.max(0, available - chipWidth),
-					"…",
+						: undefined;
+				const row = composeFooterRow(
+					settings,
+					{
+						branch: branch
+							? theme.fg("muted", `${BRANCH_ICON} ${branch}`)
+							: undefined,
+						cwd: theme.fg("dim", formatCwd(ctx.cwd, homedir())),
+						context: chip,
+					},
+					available,
+					separator,
 				);
-				const gap = Math.max(0, available - visibleWidth(leftText) - chipWidth);
-				const row =
-					chip === ""
-						? leftText
-						: leftText + " ".repeat(gap) + separator + chip;
+				if (row === "") return [];
 				// grok keeps one blank row between the prompt box and the bottom
 				// chrome (`shortcuts_gap`); mirror it above the footer.
 				return ["", " ".repeat(margin) + row];
@@ -679,8 +738,147 @@ function installFooter(ctx: ExtensionContext): void {
 	});
 }
 
+async function openSettingsOverlay(
+	ctx: ExtensionContext,
+	getSettings: () => OscuraSettings,
+	setSettings: (settings: OscuraSettings) => void,
+): Promise<void> {
+	await ctx.ui.custom<void>(
+		(tui, theme, _keybindings, done) => {
+			let current = getSettings();
+			const items: SettingItem[] = [
+				...VISIBILITY_SETTING_KEYS.map((key) => ({
+					id: key,
+					label: VISIBILITY_ITEMS[key].label,
+					description: VISIBILITY_ITEMS[key].description,
+					currentValue: current[key] ? "shown" : "hidden",
+					values: ["shown", "hidden"],
+				})),
+				{
+					id: "preset-default",
+					label: "Reset to defaults",
+					description: "Show every configurable Oscura chrome region.",
+					currentValue: "apply",
+					values: ["apply"],
+				},
+				{
+					id: "preset-minimal",
+					label: "Use Minimal preset",
+					description: "Hide all configurable captions, footer fields, and turn status.",
+					currentValue: "apply",
+					values: ["apply"],
+				},
+			];
+
+			const container = new Container();
+			container.addChild(
+				new DynamicBorder((text: string) => theme.fg("borderAccent", text)),
+			);
+			container.addChild({
+				render(width: number) {
+					return [
+						truncateToWidth(
+							theme.fg("accent", theme.bold(" Oscura UI Settings")),
+							width,
+						),
+						truncateToWidth(
+							theme.fg("dim", " Global · changes apply immediately"),
+							width,
+						),
+					];
+				},
+				invalidate() {},
+			});
+
+			let settingsList: SettingsList;
+			const refreshValues = () => {
+				for (const key of VISIBILITY_SETTING_KEYS) {
+					settingsList.updateValue(key, current[key] ? "shown" : "hidden");
+				}
+			};
+			const commit = (next: OscuraSettings) => {
+				try {
+					setSettings(next);
+					current = next;
+				} catch (error) {
+					ctx.ui.notify(
+						`Could not save Oscura settings: ${error instanceof Error ? error.message : String(error)}`,
+						"error",
+					);
+				}
+				refreshValues();
+				tui.requestRender();
+			};
+
+			settingsList = new SettingsList(
+				items,
+				items.length,
+				getSettingsListTheme(),
+				(id, newValue) => {
+					if (id === "preset-default") {
+						commit(applyOscuraPreset("default"));
+						return;
+					}
+					if (id === "preset-minimal") {
+						commit(applyOscuraPreset("minimal"));
+						return;
+					}
+					if (VISIBILITY_SETTING_KEYS.includes(id as VisibilitySettingKey)) {
+						commit(
+							withOscuraSetting(
+								current,
+								id as VisibilitySettingKey,
+								newValue === "shown",
+							),
+						);
+					}
+				},
+				() => done(undefined),
+			);
+			container.addChild(settingsList);
+			container.addChild(
+				new DynamicBorder((text: string) => theme.fg("borderAccent", text)),
+			);
+
+			return {
+				render: (width: number) => container.render(width),
+				invalidate: () => container.invalidate(),
+				handleInput: (data: string) => {
+					settingsList.handleInput(data);
+					tui.requestRender();
+				},
+			};
+		},
+		{
+			overlay: true,
+			overlayOptions: {
+				anchor: "center",
+				width: 68,
+				minWidth: 36,
+				maxHeight: "90%",
+				margin: 1,
+			},
+		},
+	);
+}
+
 export default function oscuraTheme(pi: ExtensionAPI) {
 	let activeUi: ExtensionContext["ui"] | undefined;
+	let settings = loadOscuraSettings(SETTINGS_PATH);
+
+	pi.registerCommand("oscura", {
+		description: "Configure Oscura UI visibility",
+		handler: async (_args, ctx) => {
+			if (ctx.mode !== "tui") {
+				ctx.ui.notify("/oscura requires TUI mode", "error");
+				return;
+			}
+			await openSettingsOverlay(ctx, () => settings, (next) => {
+				saveOscuraSettings(SETTINGS_PATH, next);
+				settings = next;
+			});
+		},
+	});
 
 	// Pi exposes one footer area. Keep pi-powerbar installed, but suppress its
 	// extra widget while this skin owns the terminal chrome.
@@ -734,13 +932,19 @@ export default function oscuraTheme(pi: ExtensionAPI) {
 			intervalMs: SPINNER_INTERVAL_MS,
 		});
 
-		installTurnStatus(ctx);
-		installFooter(ctx);
+		installTurnStatus(ctx, () => settings);
+		installFooter(ctx, () => settings);
 
 		ctx.ui.setEditorComponent(
 			(tui, editorTheme, keybindings) =>
 				new OscuraEditor(tui, editorTheme, keybindings, () => ctx.ui.theme, {
-					title: () => pi.getSessionName() ?? basename(ctx.cwd) ?? "",
+					title: () =>
+						resolveSessionTitle(
+							settings,
+							pi.getSessionName(),
+							basename(ctx.cwd),
+						),
+					showModelCaption: () => settings.showModelCaption,
 					// Spec §3: grok's info line shows the model id, not its display name.
 					model: () => ctx.model?.id || ctx.model?.name || "no model",
 					effort: () => pi.getThinkingLevel(),

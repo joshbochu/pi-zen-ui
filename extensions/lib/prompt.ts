@@ -164,6 +164,21 @@ export function infoLine(
 	return ` ${style.model(truncateToWidth(model, budget, "…"))} `;
 }
 
+/** Rebuild a lower border with an optional caption while preserving width. */
+export function captionOnBottomBorder(
+	border: string,
+	caption: string,
+	width: number,
+	connector: string,
+): string {
+	if (width <= 0) return "";
+	const shownConnector = truncateToWidth(connector, width, "");
+	const remaining = Math.max(0, width - visibleWidth(shownConnector));
+	const shownCaption = truncateToWidth(caption, remaining, "");
+	const borderWidth = Math.max(0, remaining - visibleWidth(shownCaption));
+	return truncateToWidth(border, borderWidth, "") + shownCaption + shownConnector;
+}
+
 /**
  * Write `overlay` onto the right end of `base`, keeping the last `reserve`
  * visible columns of `base`. Result keeps `base`'s visible width; if the

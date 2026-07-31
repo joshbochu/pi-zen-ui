@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
 	PLACEHOLDER,
+	captionOnBottomBorder,
 	infoLine,
 	overlayRight,
 	placeholderRow,
@@ -121,6 +122,27 @@ test("infoLine styles each piece", () => {
 		line,
 		` \x1b[35mgrok-4 (low)\x1b[0m\x1b[90m · \x1b[0m\x1b[90mplan\x1b[0m `,
 	);
+});
+
+test("empty captions preserve top and lower border widths", () => {
+	const border = "─".repeat(20);
+	const top = titleOnBorder(border, "", id);
+	const bottom = captionOnBottomBorder(border, "", 20, "─");
+	assert.equal(top, border);
+	assert.equal(bottom, border);
+	assert.equal(visibleWidth(top), 20);
+	assert.equal(visibleWidth(bottom), 20);
+});
+
+test("captionOnBottomBorder keeps a visible caption inside the border width", () => {
+	const result = captionOnBottomBorder(
+		"─".repeat(20),
+		" model (high) ",
+		20,
+		"─",
+	);
+	assert.equal(result, "───── model (high) ─");
+	assert.equal(visibleWidth(result), 20);
 });
 
 test("overlayRight writes onto the right end of base", () => {
