@@ -1,6 +1,6 @@
 {
   "name": "@joshbochu/pi-oscura-theme",
-  "version": "0.1.4",
+  "version": "0.2.0",
   "description": "Oscura Midnight theme and terminal skin for Pi",
   "type": "module",
   "scripts": {
