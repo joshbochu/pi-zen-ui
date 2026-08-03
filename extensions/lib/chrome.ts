@@ -1,4 +1,4 @@
-import type { OscuraSettings } from "./settings.ts";
+import type { PiGrokBuildUISettings } from "./settings.ts";
 import { truncateToWidth, visibleWidth } from "./prompt.ts";
 
 export interface FooterValues {
@@ -8,7 +8,7 @@ export interface FooterValues {
 }
 
 export function resolveSessionTitle(
-	settings: OscuraSettings,
+	settings: PiGrokBuildUISettings,
 	explicitTitle: string | undefined,
 	cwdName: string,
 ): string {
@@ -18,7 +18,7 @@ export function resolveSessionTitle(
 
 /** Compose branch/cwd on the left and context on the right without orphan separators. */
 export function composeFooterRow(
-	settings: OscuraSettings,
+	settings: PiGrokBuildUISettings,
 	values: FooterValues,
 	width: number,
 	separator: string,

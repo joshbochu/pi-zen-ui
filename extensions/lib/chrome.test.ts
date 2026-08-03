@@ -3,14 +3,14 @@ import test from "node:test";
 
 import { composeFooterRow, resolveSessionTitle } from "./chrome.ts";
 import {
-	DEFAULT_OSCURA_SETTINGS,
-	type OscuraSettings,
+	DEFAULT_PI_GROK_BUILD_UI_SETTINGS,
+	type PiGrokBuildUISettings,
 } from "./settings.ts";
 import { visibleWidth } from "./prompt.ts";
 
 const values = {
 	branch: "⎇ main",
-	cwd: "~/dev/pi-oscura-theme",
+	cwd: "~/dev/pi-grok-build-ui",
 	context: "21K / 1.0M",
 };
 const separator = " │ ";
@@ -19,9 +19,9 @@ function visibility(
 	showGitBranch: boolean,
 	showCurrentDirectory: boolean,
 	showContextUsage: boolean,
-): OscuraSettings {
+): PiGrokBuildUISettings {
 	return {
-		...DEFAULT_OSCURA_SETTINGS,
+		...DEFAULT_PI_GROK_BUILD_UI_SETTINGS,
 		showGitBranch,
 		showCurrentDirectory,
 		showContextUsage,
@@ -31,7 +31,7 @@ function visibility(
 test("resolveSessionTitle distinguishes explicit names from cwd fallback", () => {
 	assert.equal(
 		resolveSessionTitle(
-			{ ...DEFAULT_OSCURA_SETTINGS, useCwdAsSessionTitle: false },
+			{ ...DEFAULT_PI_GROK_BUILD_UI_SETTINGS, useCwdAsSessionTitle: false },
 			"Named session",
 			"dev",
 		),
@@ -39,19 +39,19 @@ test("resolveSessionTitle distinguishes explicit names from cwd fallback", () =>
 	);
 	assert.equal(
 		resolveSessionTitle(
-			{ ...DEFAULT_OSCURA_SETTINGS, useCwdAsSessionTitle: false },
+			{ ...DEFAULT_PI_GROK_BUILD_UI_SETTINGS, useCwdAsSessionTitle: false },
 			undefined,
 			"dev",
 		),
 		"",
 	);
 	assert.equal(
-		resolveSessionTitle(DEFAULT_OSCURA_SETTINGS, undefined, "dev"),
+		resolveSessionTitle(DEFAULT_PI_GROK_BUILD_UI_SETTINGS, undefined, "dev"),
 		"dev",
 	);
 	assert.equal(
 		resolveSessionTitle(
-			{ ...DEFAULT_OSCURA_SETTINGS, showSessionTitle: false },
+			{ ...DEFAULT_PI_GROK_BUILD_UI_SETTINGS, showSessionTitle: false },
 			"Named session",
 			"dev",
 		),
@@ -64,16 +64,16 @@ test("composeFooterRow handles all visibility combinations without orphan separa
 	const cases = [
 		[false, false, false, ""],
 		[true, false, false, "⎇ main"],
-		[false, true, false, "~/dev/pi-oscura-theme"],
-		[true, true, false, "⎇ main │ ~/dev/pi-oscura-theme"],
+		[false, true, false, "~/dev/pi-grok-build-ui"],
+		[true, true, false, "⎇ main │ ~/dev/pi-grok-build-ui"],
 		[false, false, true, "21K / 1.0M"],
 		[true, false, true, "⎇ main │ 21K / 1.0M"],
-		[false, true, true, "~/dev/pi-oscura-theme │ 21K / 1.0M"],
+		[false, true, true, "~/dev/pi-grok-build-ui │ 21K / 1.0M"],
 		[
 			true,
 			true,
 			true,
-			"⎇ main │ ~/dev/pi-oscura-theme │ 21K / 1.0M",
+			"⎇ main │ ~/dev/pi-grok-build-ui │ 21K / 1.0M",
 		],
 	] as const;
 
@@ -99,7 +99,7 @@ test("composeFooterRow handles all visibility combinations without orphan separa
 test("composeFooterRow omits unavailable branch and context values", () => {
 	assert.equal(
 		composeFooterRow(
-			DEFAULT_OSCURA_SETTINGS,
+			DEFAULT_PI_GROK_BUILD_UI_SETTINGS,
 			{ branch: undefined, cwd: "~/dev", context: undefined },
 			40,
 			separator,
@@ -111,7 +111,7 @@ test("composeFooterRow omits unavailable branch and context values", () => {
 test("composeFooterRow stays within narrow widths", () => {
 	for (let width = 0; width <= 40; width++) {
 		const row = composeFooterRow(
-			DEFAULT_OSCURA_SETTINGS,
+			DEFAULT_PI_GROK_BUILD_UI_SETTINGS,
 			values,
 			width,
 			separator,

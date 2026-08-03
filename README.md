@@ -1,30 +1,49 @@
-# Pi Oscura Theme
+# PiGrokBuild UI
 
-Oscura Midnight theme and terminal skin for [Pi](https://pi.dev/).
+PiGrokBuild UI is an unofficial, high-fidelity port of the
+[Grok Build](https://x.ai/build) terminal interface for
+[Pi](https://pi.dev/).
 
-A high-fidelity port of the way xAI's `grok` CLI looks. grok ships this palette
-itself as `ThemeKind::OscuraMidnight`, so the colours, glyphs, formats and layout
-here are literals taken from its source rather than eyeballed approximations —
-see [docs/grok-fidelity-spec.md](docs/grok-fidelity-spec.md), which also records
-the handful of things Pi's rendering model cannot express.
+It brings the parts of Grok Build's presentation layer that Pi can express:
+the Oscura Midnight canvas, composer and completion chrome, turn status,
+footer, Markdown treatment, cursor, and appearance controls. The colours,
+glyphs, formats, and layout are taken from the upstream source rather than
+eyeballed—see [docs/grok-fidelity-spec.md](docs/grok-fidelity-spec.md) for the
+ground truth and the remaining rendering differences.
+
+PiGrokBuild UI is an independent compatibility project. Its scope ends at the
+presentation and interaction layer: it does not include xAI models,
+authentication, tools, workflows, or the Grok Build agent runtime. Pi continues
+to provide the agent underneath the interface, and broader behavior can be
+added as separate Pi extensions alongside this package.
 
 ## Install
 
 ```bash
-pi install npm:@joshbochu/pi-oscura-theme
+pi install npm:@joshbochu/pi-grok-build-ui
 ```
 
 Or from git:
 
 ```bash
-pi install git:github.com/joshbochu/pi-oscura-theme
+pi install git:github.com/joshbochu/pi-grok-build-ui
 ```
 
 Local path (development):
 
 ```bash
-pi install ~/dev/pi-oscura-theme
+pi install ~/dev/pi-grok-build-ui
 ```
+
+Upgrading from `@joshbochu/pi-oscura-theme`:
+
+```bash
+pi remove npm:@joshbochu/pi-oscura-theme
+pi install npm:@joshbochu/pi-grok-build-ui
+```
+
+Removing the former package first prevents both extensions from owning the same
+Pi interface. Existing appearance settings are carried forward automatically.
 
 ## Included
 
@@ -32,21 +51,21 @@ pi install ~/dev/pi-oscura-theme
   `grok-night.tmTheme` syntax colours (they are a different family from the
   chrome palette; deriving them from the purple accents is the single most
   visible way to get this theme wrong)
-- `extensions/oscura-theme.ts` — rounded composer, prompt info line, turn-status
-  row, autocomplete panel, footer
+- `extensions/pi-grok-build-ui.ts` — rounded composer, prompt info line,
+  turn-status row, autocomplete panel, footer
 - `extensions/lib/` — the pure layout, format and phase logic, unit-tested
-- `bin/gpi-preview` — isolated alternate-screen preview launcher
+- `bin/pi-grok-build-ui-preview` — isolated alternate-screen preview launcher
 
-## What the skin renders
+## What PiGrokBuild UI renders
 
 ```
   ⠴ Responding… 1.7s · queued                         3.1s ⇣8.42k [stop]
 
-  ╭─────────────────────────────────────────────── pi-oscura-theme ──╮
+  ╭─────────────────────────────────────────────── pi-grok-build-ui ──╮
   │ ❯ Build anything                                                 │
   ╰──────────────────────────────── bedrock-claude-opus-5 • xhigh ───╯
 
-  ⎇ fidelity │ ~/dev/pi-oscura-theme │ 21K / 1.0M
+  ⎇ fidelity │ ~/dev/pi-grok-build-ui │ 21K / 1.0M
 ```
 
 - **Turn-status row** — grok's 8-frame braille spinner at 133ms, the phase label
@@ -78,25 +97,26 @@ pi install ~/dev/pi-oscura-theme
 From a clone, or after install:
 
 ```bash
-./bin/gpi-preview
+./bin/pi-grok-build-ui-preview
 # or
-npx --yes --package=@joshbochu/pi-oscura-theme gpi-preview
+npx --yes --package=@joshbochu/pi-grok-build-ui pi-grok-build-ui-preview
 ```
 
 Pass normal Pi arguments after the launcher:
 
 ```bash
-./bin/gpi-preview --thinking low \
+./bin/pi-grok-build-ui-preview --thinking low \
   "Show a short theme preview with headings, bullets, and code. Do not use tools."
 ```
 
-Set `PI_OSCURA_ALT_SCREEN=0` to keep Pi in normal terminal scrollback.
+Set `PI_GROK_BUILD_UI_ALT_SCREEN=0` to keep Pi in normal terminal scrollback.
 
-## `/oscura` appearance settings
+## `/pi-grok-build-ui` appearance settings
 
-Run `/oscura` in Pi to open the Oscura UI Settings overlay. Use the configured Pi
-selection keys (arrow keys by default) to navigate, Enter or Space to change a
-setting, and Escape to close. Changes apply immediately.
+Run `/pi-grok-build-ui` in Pi to open the PiGrokBuild UI Settings overlay. Use
+the configured Pi selection keys (arrow keys by default) to navigate, Enter or
+Space to change a setting, and Escape to close. Changes apply immediately. The
+former `/oscura` command remains as a compatibility alias.
 
 ### Accent colors
 
@@ -132,11 +152,13 @@ All regions are shown by default. **Reset visibility** restores that state.
 **Use Minimal visibility** hides all seven configurable regions; neither action
 changes the selected accent, and each toggle can still be changed afterward.
 
-Settings are global and persist across Pi restarts in Oscura's extension-owned
-`oscura-theme.json` under Pi's agent directory—normally
-`~/.pi/agent/oscura-theme.json`, or the directory selected by
+Settings are global and persist across Pi restarts in PiGrokBuild UI's
+extension-owned `pi-grok-build-ui.json` under Pi's agent directory—normally
+`~/.pi/agent/pi-grok-build-ui.json`, or the directory selected by
 `PI_CODING_AGENT_DIR`. Writes are atomic, and missing or malformed settings
-safely fall back to the defaults. Oscura does not add private keys to Pi's main
+safely fall back to the defaults. PiGrokBuild UI reads the former
+`oscura-theme.json` when the new file does not exist, so existing appearance
+settings carry forward. It does not add private keys to Pi's main
 `settings.json`.
 
 The completion dropdown, prompt marker, headings, and context gradient inherit
@@ -150,7 +172,7 @@ The skin temporarily sets the terminal default background to `#030304` with OSC 
 Disable this behavior for one run:
 
 ```bash
-PI_OSCURA_TERMINAL_CANVAS=0 pi
+PI_GROK_BUILD_UI_TERMINAL_CANVAS=0 pi
 ```
 
 After an ungraceful process kill, reset the terminal background manually:
@@ -162,7 +184,9 @@ printf '\e]111\a'
 ## Notes
 
 The extension builds `oscura-midnight` in memory at TUI startup using the saved
-accent selection. Set `PI_OSCURA_KEEP_POWERBAR=1` to retain pi-powerbar's widget.
+accent selection. Set `PI_GROK_BUILD_UI_KEEP_POWERBAR=1` to retain
+pi-powerbar's widget. The former `PI_OSCURA_*` names remain supported for
+compatibility.
 
 The cursor is set to the theme's accent with OSC 12 and restored with OSC 112,
 alongside the canvas sequences above.
@@ -181,13 +205,11 @@ npm run typecheck
 ```
 
 Everything with layout or format logic lives in `extensions/lib/` as a pure
-module so it can be tested without booting a TUI. `extensions/oscura-theme.ts`
-is the wiring layer, verified by running Pi under a pty and inspecting the
-emitted frames.
+module so it can be tested without booting a TUI.
+`extensions/pi-grok-build-ui.ts` is the wiring layer, verified by running Pi
+under a pty and inspecting the emitted frames.
 
 ## Recommended Pi settings
-
-Recommended Pi settings:
 
 ```json
 {

@@ -3,9 +3,10 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 THEME="$ROOT/themes/oscura-midnight.json"
-EXTENSION="$ROOT/extensions/oscura-theme.ts"
+EXTENSION="$ROOT/extensions/pi-grok-build-ui.ts"
 BASE_AGENT_DIR="${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}"
-PREVIEW_AGENT_DIR="$(mktemp -d "${TMPDIR:-/tmp}/pi-oscura-preview.XXXXXX")"
+PREVIEW_AGENT_DIR="$(mktemp -d "${TMPDIR:-/tmp}/pi-grok-build-ui-preview.XXXXXX")"
+ALT_SCREEN_SETTING="${PI_GROK_BUILD_UI_ALT_SCREEN:-${PI_OSCURA_ALT_SCREEN:-1}}"
 ALT_SCREEN=0
 
 cleanup() {
@@ -46,7 +47,7 @@ if [[ -d "$BASE_AGENT_DIR/bin" ]]; then
   ln -s "$BASE_AGENT_DIR/bin" "$PREVIEW_AGENT_DIR/bin"
 fi
 
-if [[ -t 1 && "${PI_OSCURA_ALT_SCREEN:-1}" != "0" ]] && command -v tput >/dev/null 2>&1; then
+if [[ -t 1 && "$ALT_SCREEN_SETTING" != "0" ]] && command -v tput >/dev/null 2>&1; then
   tput smcup
   ALT_SCREEN=1
 fi

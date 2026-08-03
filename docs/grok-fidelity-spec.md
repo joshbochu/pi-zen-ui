@@ -1,14 +1,15 @@
-# Grok TUI fidelity spec
+# PiGrokBuild UI fidelity spec
 
-Ground truth extracted from `github.com/xai-org/grok-build` (Rust, `crates/codegen/`),
-last verified against `SOURCE_REV 2a28b4a`. grok ships this exact theme itself as
-`ThemeKind::OscuraMidnight`, so nothing here is guesswork — every value below is a
+Ground truth extracted from the upstream Grok Build repository at
+`github.com/xai-org/grok-build` (Rust, `crates/codegen/`), last verified against
+`SOURCE_REV 2a28b4a`. The `grok` binary ships this exact theme itself as
+`ThemeKind::OscuraMidnight`, so nothing here is guesswork—every value below is a
 literal from the reference implementation.
 
-Oscura uses these values unchanged by default. Its optional `/oscura` accent
-presets deliberately replace only the purple chrome ramp and purple-tinted
-highlights; the canvas, syntax palette, and semantic status colors remain the
-reference values documented here.
+PiGrokBuild UI uses these values unchanged by default. Its optional
+`/pi-grok-build-ui` accent presets deliberately replace only the purple chrome
+ramp and purple-tinted highlights; the canvas, syntax palette, and semantic
+status colors remain the reference values documented here.
 
 Key source files:
 
@@ -120,7 +121,7 @@ TokyoNight-derived; deriving syntax colors from the purple chrome palette is wro
 - Info line sits **on** the bottom border row, right-aligned inside the box's
   content span (its trailing pad space lands 2 cells before `╯`, `mod.rs:3363`):
   `" " + model + (" · " + flag)* + " "`.
-  - grok's model text is `"{model_id} ({reasoning_effort})"`; the Oscura port
+  - grok's model text is `"{model_id} ({reasoning_effort})"`; PiGrokBuild UI
     intentionally renders `"{model_id} • {reasoning_effort}"` with U+2022 instead.
   - separator `" · "` U+00B7 in `gray_dim` focused, blended 0.6 toward the canvas
     unfocused; flags in `gray` focused, blended 0.5 unfocused; `plan` in
