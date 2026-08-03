@@ -56,13 +56,13 @@ import {
 } from "./lib/prompt.ts";
 import {
 	VISIBILITY_SETTING_KEYS,
-	applyOscuraPreset,
-	loadOscuraSettings,
-	saveOscuraSettings,
+	applyVisibilityPreset,
+	loadPiGrokBuildUISettings,
+	savePiGrokBuildUISettings,
 	withAccentPreset,
 	withCustomAccent,
-	withOscuraSetting,
-	type OscuraSettings,
+	withVisibilitySetting,
+	type PiGrokBuildUISettings,
 	type VisibilitySettingKey,
 } from "./lib/settings.ts";
 import {
@@ -77,11 +77,12 @@ const THEME_PATH = resolve(
 	dirname(fileURLToPath(import.meta.url)),
 	"../themes/oscura-midnight.json",
 );
-const SETTINGS_PATH = join(getAgentDir(), "oscura-theme.json");
+const SETTINGS_PATH = join(getAgentDir(), "pi-grok-build-ui.json");
+const LEGACY_SETTINGS_PATH = join(getAgentDir(), "oscura-theme.json");
 const THEME_TEMPLATE = JSON.parse(
 	readFileSync(THEME_PATH, "utf8"),
 ) as ThemeTemplate;
-const STATUS_KEY = "oscura-theme-turn-status";
+const STATUS_KEY = "pi-grok-build-ui-turn-status";
 // Spec §3: grok's whole UI sits inside a 2-column outer pad
 // (`LayoutConfig::outer_hpad_left/right = 2`); chrome rows share it.
 const CHROME_MARGIN = 2;
@@ -105,6 +106,17 @@ const RESET_CURSOR_COLOR = "\x1b]112\x07";
 const CONTEXT_SEPARATOR = "│";
 // grok's non-Nerd-font git branch icon (`git_info.rs:328`).
 const BRANCH_ICON = "⎇";
+
+function environmentValue(name: string, legacyName: string): string | undefined {
+	return process.env[name] ?? process.env[legacyName];
+}
+
+function keepPowerbar(): boolean {
+	return environmentValue(
+		"PI_GROK_BUILD_UI_KEEP_POWERBAR",
+		"PI_OSCURA_KEEP_POWERBAR",
+	) === "1";
+}
 
 const VISIBILITY_ITEMS: Record<
 	VisibilitySettingKey,
@@ -200,7 +212,10 @@ function hexFg(
 	return `\x1b[38;2;${r};${g};${b}m${text}\x1b[39m`;
 }
 
-function createAccentTheme(settings: OscuraSettings, currentTheme: Theme): Theme {
+function createAccentTheme(
+	settings: PiGrokBuildUISettings,
+	currentTheme: Theme,
+): Theme {
 	const maps = buildAccentThemeColors(
 		THEME_TEMPLATE,
 		resolveAccentPalette(settings),
@@ -245,23 +260,27 @@ function markdownPalette(fallbackTheme: Theme) {
  */
 function skinMessageComponent(Component: { prototype: object }): void {
 	const proto = Component.prototype as {
-		__oscuraSkin?: boolean;
+		__piGrokBuildUISkin?: boolean;
 		setOutputPad?: (padding: number) => void;
 		updateContent?: (this: object, ...args: unknown[]) => unknown;
 		rebuild?: (this: object, ...args: unknown[]) => unknown;
 	};
-	if (proto.__oscuraSkin) return;
-	proto.__oscuraSkin = true;
+	if (proto.__piGrokBuildUISkin) return;
+	proto.__piGrokBuildUISkin = true;
 
 	const pin = (instance: {
 		outputPad?: number;
 		markdownTheme?: MarkdownThemeLike;
-		__oscuraMarkdown?: boolean;
+		__piGrokBuildUIMarkdown?: boolean;
 	}) => {
 		instance.outputPad = OUTPUT_PAD;
-		if (instance.__oscuraMarkdown || !instance.markdownTheme || !activeTheme)
+		if (
+			instance.__piGrokBuildUIMarkdown ||
+			!instance.markdownTheme ||
+			!activeTheme
+		)
 			return;
-		instance.__oscuraMarkdown = true;
+		instance.__piGrokBuildUIMarkdown = true;
 		instance.markdownTheme = grokMarkdownTheme(
 			instance.markdownTheme,
 			markdownPalette(activeTheme),
@@ -322,7 +341,10 @@ function cursorColorEscape(hex: string): string {
 function enableTerminalCanvas(cursorColor: string): void {
 	if (
 		!process.stdout.isTTY ||
-		process.env.PI_OSCURA_TERMINAL_CANVAS === "0"
+		environmentValue(
+			"PI_GROK_BUILD_UI_TERMINAL_CANVAS",
+			"PI_OSCURA_TERMINAL_CANVAS",
+		) === "0"
 	) {
 		return;
 	}
@@ -379,7 +401,7 @@ interface EditorChrome {
 }
 
 /** Exported for the pty-free render harness; Pi only sees the default export. */
-export class OscuraEditor extends CustomEditor {
+export class PiGrokBuildUIEditor extends CustomEditor {
 	private readonly menuRenderState: { width: number; query: string };
 
 	constructor(
@@ -691,7 +713,7 @@ export class OscuraEditor extends CustomEditor {
 
 function installTurnStatus(
 	ctx: ExtensionContext,
-	getSettings: () => OscuraSettings,
+	getSettings: () => PiGrokBuildUISettings,
 ): void {
 	ctx.ui.setWidget(
 		STATUS_KEY,
@@ -747,7 +769,7 @@ function installTurnStatus(
 
 function installFooter(
 	ctx: ExtensionContext,
-	getSettings: () => OscuraSettings,
+	getSettings: () => PiGrokBuildUISettings,
 ): void {
 	ctx.ui.setFooter((tui, _theme, footerData) => {
 		const unsubscribe = footerData.onBranchChange(() => tui.requestRender());
@@ -801,8 +823,8 @@ function installFooter(
 
 async function openSettingsOverlay(
 	ctx: ExtensionContext,
-	getSettings: () => OscuraSettings,
-	setSettings: (settings: OscuraSettings) => void,
+	getSettings: () => PiGrokBuildUISettings,
+	setSettings: (settings: PiGrokBuildUISettings) => void,
 ): Promise<void> {
 	await ctx.ui.custom<void>(
 		(tui, _theme, _keybindings, done) => {
@@ -866,7 +888,7 @@ async function openSettingsOverlay(
 					id: "accent-preset",
 					label: "Color preset",
 					description:
-						"Recolor Oscura chrome while preserving its canvas, syntax, and semantic status colors.",
+						"Recolor PiGrokBuild UI chrome while preserving the Oscura canvas, syntax, and semantic status colors.",
 					currentValue: ACCENT_PRESET_LABELS[current.accentPreset],
 					values: presetLabels,
 				},
@@ -889,7 +911,7 @@ async function openSettingsOverlay(
 					id: "preset-default",
 					label: "Reset visibility",
 					description:
-						"Show every configurable Oscura chrome region without changing the accent.",
+						"Show every configurable PiGrokBuild UI region without changing the accent.",
 					currentValue: "apply",
 					values: ["apply"],
 				},
@@ -914,7 +936,7 @@ async function openSettingsOverlay(
 					const theme = ctx.ui.theme;
 					return [
 						truncateToWidth(
-							theme.fg("accent", theme.bold(" Oscura UI Settings")),
+							theme.fg("accent", theme.bold(" PiGrokBuild UI Settings")),
 							width,
 						),
 						truncateToWidth(
@@ -951,13 +973,13 @@ async function openSettingsOverlay(
 					settingsList.updateValue(key, current[key] ? "shown" : "hidden");
 				}
 			};
-			const commit = (next: OscuraSettings) => {
+			const commit = (next: PiGrokBuildUISettings) => {
 				try {
 					setSettings(next);
 					current = next;
 				} catch (error) {
 					ctx.ui.notify(
-						`Could not save Oscura settings: ${error instanceof Error ? error.message : String(error)}`,
+						`Could not save PiGrokBuild UI settings: ${error instanceof Error ? error.message : String(error)}`,
 						"error",
 					);
 				}
@@ -981,16 +1003,16 @@ async function openSettingsOverlay(
 						return;
 					}
 					if (id === "preset-default") {
-						commit(applyOscuraPreset("default", current));
+						commit(applyVisibilityPreset("default", current));
 						return;
 					}
 					if (id === "preset-minimal") {
-						commit(applyOscuraPreset("minimal", current));
+						commit(applyVisibilityPreset("minimal", current));
 						return;
 					}
 					if (VISIBILITY_SETTING_KEYS.includes(id as VisibilitySettingKey)) {
 						commit(
-							withOscuraSetting(
+							withVisibilitySetting(
 								current,
 								id as VisibilitySettingKey,
 								newValue === "shown",
@@ -1029,9 +1051,12 @@ async function openSettingsOverlay(
 	);
 }
 
-export default function oscuraTheme(pi: ExtensionAPI) {
+export default function piGrokBuildUI(pi: ExtensionAPI) {
 	let activeUi: ExtensionContext["ui"] | undefined;
-	let settings = loadOscuraSettings(SETTINGS_PATH);
+	let settings = loadPiGrokBuildUISettings(
+		SETTINGS_PATH,
+		LEGACY_SETTINGS_PATH,
+	);
 
 	const applyTheme = (ctx: ExtensionContext) => {
 		try {
@@ -1048,31 +1073,40 @@ export default function oscuraTheme(pi: ExtensionAPI) {
 			});
 		} catch (error) {
 			ctx.ui.notify(
-				`Could not apply Oscura accent: ${error instanceof Error ? error.message : String(error)}`,
+				`Could not apply PiGrokBuild UI accent: ${error instanceof Error ? error.message : String(error)}`,
 				"warning",
 			);
 		}
 	};
 
+	const configureAppearance = async (
+		_args: string,
+		ctx: ExtensionContext,
+	) => {
+		if (ctx.mode !== "tui") {
+			ctx.ui.notify("/pi-grok-build-ui requires TUI mode", "error");
+			return;
+		}
+		await openSettingsOverlay(ctx, () => settings, (next) => {
+			savePiGrokBuildUISettings(SETTINGS_PATH, next);
+			settings = next;
+			applyTheme(ctx);
+		});
+	};
+
+	pi.registerCommand("pi-grok-build-ui", {
+		description: "Configure the PiGrokBuild UI",
+		handler: configureAppearance,
+	});
 	pi.registerCommand("oscura", {
-		description: "Configure Oscura appearance",
-		handler: async (_args, ctx) => {
-			if (ctx.mode !== "tui") {
-				ctx.ui.notify("/oscura requires TUI mode", "error");
-				return;
-			}
-			await openSettingsOverlay(ctx, () => settings, (next) => {
-				saveOscuraSettings(SETTINGS_PATH, next);
-				settings = next;
-				applyTheme(ctx);
-			});
-		},
+		description: "Alias for /pi-grok-build-ui",
+		handler: configureAppearance,
 	});
 
 	// Pi exposes one footer area. Keep pi-powerbar installed, but suppress its
 	// extra widget while this skin owns the terminal chrome.
 	pi.events.on("powerbar:update", () => {
-		if (process.env.PI_OSCURA_KEEP_POWERBAR !== "1") {
+		if (!keepPowerbar()) {
 			activeUi?.setWidget("powerbar", undefined);
 		}
 	});
@@ -1092,7 +1126,7 @@ export default function oscuraTheme(pi: ExtensionAPI) {
 		activeUi = ctx.ui;
 		contextTokens = () => ctx.getContextUsage()?.tokens ?? undefined;
 		applyTheme(ctx);
-		if (process.env.PI_OSCURA_KEEP_POWERBAR !== "1") {
+		if (!keepPowerbar()) {
 			ctx.ui.setWidget("powerbar", undefined);
 		}
 
@@ -1107,18 +1141,24 @@ export default function oscuraTheme(pi: ExtensionAPI) {
 
 		ctx.ui.setEditorComponent(
 			(tui, editorTheme, keybindings) =>
-				new OscuraEditor(tui, editorTheme, keybindings, () => ctx.ui.theme, {
-					title: () =>
-						resolveSessionTitle(
-							settings,
-							pi.getSessionName(),
-							basename(ctx.cwd),
-						),
-					showModelCaption: () => settings.showModelCaption,
-					// Spec §3: grok's info line shows the model id, not its display name.
-					model: () => ctx.model?.id || ctx.model?.name || "no model",
-					effort: () => pi.getThinkingLevel(),
-				}),
+				new PiGrokBuildUIEditor(
+					tui,
+					editorTheme,
+					keybindings,
+					() => ctx.ui.theme,
+					{
+						title: () =>
+							resolveSessionTitle(
+								settings,
+								pi.getSessionName(),
+								basename(ctx.cwd),
+							),
+						showModelCaption: () => settings.showModelCaption,
+						// Spec §3: grok's info line shows the model id, not its display name.
+						model: () => ctx.model?.id || ctx.model?.name || "no model",
+						effort: () => pi.getThinkingLevel(),
+					},
+				),
 		);
 	});
 

@@ -1,7 +1,7 @@
 {
-  "name": "@joshbochu/pi-oscura-theme",
-  "version": "0.2.0",
-  "description": "Oscura Midnight theme and terminal skin for Pi",
+  "name": "@joshbochu/pi-grok-build-ui",
+  "version": "0.3.0",
+  "description": "PiGrokBuild UI: an unofficial Grok Build presentation layer for Pi",
   "type": "module",
   "scripts": {
     "test": "node --test \"extensions/lib/*.test.ts\"",
@@ -11,11 +11,11 @@
   "author": "joshbochu",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/joshbochu/pi-oscura-theme.git"
+    "url": "git+https://github.com/joshbochu/pi-grok-build-ui.git"
   },
-  "homepage": "https://github.com/joshbochu/pi-oscura-theme#readme",
+  "homepage": "https://github.com/joshbochu/pi-grok-build-ui#readme",
   "bugs": {
-    "url": "https://github.com/joshbochu/pi-oscura-theme/issues"
+    "url": "https://github.com/joshbochu/pi-grok-build-ui/issues"
   },
   "publishConfig": {
     "access": "public",
@@ -29,14 +29,21 @@
     "LICENSE"
   ],
   "bin": {
-    "gpi-preview": "bin/gpi-preview"
+    "pi-grok-build-ui-preview": "bin/pi-grok-build-ui-preview"
   },
   "keywords": [
     "pi-package",
     "pi-theme",
     "pi",
+    "grok-build-ui",
+    "grok-build",
+    "grok",
+    "coding-agent",
+    "tui",
+    "ui",
     "oscura-midnight",
-    "theme"
+    "theme",
+    "skin"
   ],
   "peerDependencies": {
     "@earendil-works/pi-coding-agent": "*",
@@ -44,7 +51,7 @@
   },
   "pi": {
     "extensions": [
-      "./extensions/oscura-theme.ts"
+      "./extensions/pi-grok-build-ui.ts"
     ],
     "themes": [
       "./themes/oscura-midnight.json"

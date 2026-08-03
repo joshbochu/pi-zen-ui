@@ -5,19 +5,19 @@ import { join } from "node:path";
 import test from "node:test";
 
 import {
-	DEFAULT_OSCURA_SETTINGS,
-	MINIMAL_OSCURA_SETTINGS,
-	applyOscuraPreset,
-	loadOscuraSettings,
-	normalizeOscuraSettings,
-	saveOscuraSettings,
+	DEFAULT_PI_GROK_BUILD_UI_SETTINGS,
+	MINIMAL_PI_GROK_BUILD_UI_SETTINGS,
+	applyVisibilityPreset,
+	loadPiGrokBuildUISettings,
+	normalizePiGrokBuildUISettings,
+	savePiGrokBuildUISettings,
 	withAccentPreset,
 	withCustomAccent,
-	withOscuraSetting,
+	withVisibilitySetting,
 } from "./settings.ts";
 
-test("Oscura defaults show every configurable chrome region", () => {
-	assert.deepEqual(DEFAULT_OSCURA_SETTINGS, {
+test("PiGrokBuild UI defaults show every configurable chrome region", () => {
+	assert.deepEqual(DEFAULT_PI_GROK_BUILD_UI_SETTINGS, {
 		accentPreset: "oscura",
 		customAccent: "#C4A7E7",
 		showSessionTitle: true,
@@ -30,9 +30,9 @@ test("Oscura defaults show every configurable chrome region", () => {
 	});
 });
 
-test("normalizeOscuraSettings accepts known booleans from partial values", () => {
+test("normalizePiGrokBuildUISettings accepts known booleans from partial values", () => {
 	assert.deepEqual(
-		normalizeOscuraSettings({
+		normalizePiGrokBuildUISettings({
 			accentPreset: "custom",
 			customAccent: "88c0d0",
 			showSessionTitle: false,
@@ -41,7 +41,7 @@ test("normalizeOscuraSettings accepts known booleans from partial values", () =>
 			unknown: false,
 		}),
 		{
-			...DEFAULT_OSCURA_SETTINGS,
+			...DEFAULT_PI_GROK_BUILD_UI_SETTINGS,
 			accentPreset: "custom",
 			customAccent: "#88C0D0",
 			showSessionTitle: false,
@@ -50,41 +50,56 @@ test("normalizeOscuraSettings accepts known booleans from partial values", () =>
 	);
 });
 
-test("normalizeOscuraSettings rejects malformed roots", () => {
+test("normalizePiGrokBuildUISettings rejects malformed roots", () => {
 	for (const value of [undefined, null, true, "settings", [], 42]) {
-		assert.deepEqual(normalizeOscuraSettings(value), DEFAULT_OSCURA_SETTINGS);
+		assert.deepEqual(
+			normalizePiGrokBuildUISettings(value),
+			DEFAULT_PI_GROK_BUILD_UI_SETTINGS,
+		);
 	}
 });
 
 test("Default and Minimal presets update visibility without replacing accent", () => {
-	assert.deepEqual(applyOscuraPreset("default"), DEFAULT_OSCURA_SETTINGS);
-	assert.deepEqual(applyOscuraPreset("minimal"), MINIMAL_OSCURA_SETTINGS);
+	assert.deepEqual(
+		applyVisibilityPreset("default"),
+		DEFAULT_PI_GROK_BUILD_UI_SETTINGS,
+	);
+	assert.deepEqual(
+		applyVisibilityPreset("minimal"),
+		MINIMAL_PI_GROK_BUILD_UI_SETTINGS,
+	);
 	const nord = {
-		...DEFAULT_OSCURA_SETTINGS,
+		...DEFAULT_PI_GROK_BUILD_UI_SETTINGS,
 		accentPreset: "nord" as const,
 		customAccent: "#123456",
 	};
-	assert.deepEqual(applyOscuraPreset("minimal", nord), {
-		...MINIMAL_OSCURA_SETTINGS,
+	assert.deepEqual(applyVisibilityPreset("minimal", nord), {
+		...MINIMAL_PI_GROK_BUILD_UI_SETTINGS,
 		accentPreset: "nord",
 		customAccent: "#123456",
 	});
-	assert.notStrictEqual(applyOscuraPreset("default"), DEFAULT_OSCURA_SETTINGS);
-	assert.notStrictEqual(applyOscuraPreset("minimal"), MINIMAL_OSCURA_SETTINGS);
+	assert.notStrictEqual(
+		applyVisibilityPreset("default"),
+		DEFAULT_PI_GROK_BUILD_UI_SETTINGS,
+	);
+	assert.notStrictEqual(
+		applyVisibilityPreset("minimal"),
+		MINIMAL_PI_GROK_BUILD_UI_SETTINGS,
+	);
 });
 
-test("withOscuraSetting returns a new settings value", () => {
-	const next = withOscuraSetting(
-		applyOscuraPreset("default"),
+test("withVisibilitySetting returns a new settings value", () => {
+	const next = withVisibilitySetting(
+		applyVisibilityPreset("default"),
 		"showGitBranch",
 		false,
 	);
 	assert.equal(next.showGitBranch, false);
-	assert.equal(DEFAULT_OSCURA_SETTINGS.showGitBranch, true);
+	assert.equal(DEFAULT_PI_GROK_BUILD_UI_SETTINGS.showGitBranch, true);
 });
 
 test("accent helpers select presets and validate custom colors", () => {
-	const nord = withAccentPreset(applyOscuraPreset("default"), "nord");
+	const nord = withAccentPreset(applyVisibilityPreset("default"), "nord");
 	assert.equal(nord.accentPreset, "nord");
 	const custom = withCustomAccent(nord, "#88c0d0");
 	assert.deepEqual(custom, {
@@ -95,30 +110,39 @@ test("accent helpers select presets and validate custom colors", () => {
 	assert.equal(withCustomAccent(nord, "not-a-color"), undefined);
 });
 
-test("loadOscuraSettings safely handles missing, malformed, and unsupported files", () => {
-	const dir = mkdtempSync(join(tmpdir(), "oscura-settings-"));
+test("loadPiGrokBuildUISettings safely handles missing, malformed, and unsupported files", () => {
+	const dir = mkdtempSync(join(tmpdir(), "pi-grok-build-ui-settings-"));
 	try {
-		const path = join(dir, "oscura-theme.json");
-		assert.deepEqual(loadOscuraSettings(path), DEFAULT_OSCURA_SETTINGS);
+		const path = join(dir, "pi-grok-build-ui.json");
+		assert.deepEqual(
+			loadPiGrokBuildUISettings(path),
+			DEFAULT_PI_GROK_BUILD_UI_SETTINGS,
+		);
 
 		writeFileSync(path, "{ definitely not json", "utf8");
-		assert.deepEqual(loadOscuraSettings(path), DEFAULT_OSCURA_SETTINGS);
+		assert.deepEqual(
+			loadPiGrokBuildUISettings(path),
+			DEFAULT_PI_GROK_BUILD_UI_SETTINGS,
+		);
 
 		writeFileSync(
 			path,
 			JSON.stringify({ version: 999, settings: { showGitBranch: false } }),
 			"utf8",
 		);
-		assert.deepEqual(loadOscuraSettings(path), DEFAULT_OSCURA_SETTINGS);
+		assert.deepEqual(
+			loadPiGrokBuildUISettings(path),
+			DEFAULT_PI_GROK_BUILD_UI_SETTINGS,
+		);
 	} finally {
 		rmSync(dir, { recursive: true, force: true });
 	}
 });
 
-test("loadOscuraSettings normalizes partial persisted settings", () => {
-	const dir = mkdtempSync(join(tmpdir(), "oscura-settings-"));
+test("loadPiGrokBuildUISettings normalizes partial persisted settings", () => {
+	const dir = mkdtempSync(join(tmpdir(), "pi-grok-build-ui-settings-"));
 	try {
-		const path = join(dir, "oscura-theme.json");
+		const path = join(dir, "pi-grok-build-ui.json");
 		writeFileSync(
 			path,
 			JSON.stringify({
@@ -131,8 +155,8 @@ test("loadOscuraSettings normalizes partial persisted settings", () => {
 			}),
 			"utf8",
 		);
-		assert.deepEqual(loadOscuraSettings(path), {
-			...DEFAULT_OSCURA_SETTINGS,
+		assert.deepEqual(loadPiGrokBuildUISettings(path), {
+			...DEFAULT_PI_GROK_BUILD_UI_SETTINGS,
 			showSessionTitle: false,
 			showGitBranch: false,
 		});
@@ -141,20 +165,57 @@ test("loadOscuraSettings normalizes partial persisted settings", () => {
 	}
 });
 
-test("saveOscuraSettings atomically round-trips without temp files", () => {
-	const dir = mkdtempSync(join(tmpdir(), "oscura-settings-"));
+test("loadPiGrokBuildUISettings falls back to the legacy file only when needed", () => {
+	const dir = mkdtempSync(join(tmpdir(), "pi-grok-build-ui-settings-"));
 	try {
-		const path = join(dir, "nested", "oscura-theme.json");
+		const path = join(dir, "pi-grok-build-ui.json");
+		const legacyPath = join(dir, "oscura-theme.json");
+		writeFileSync(
+			legacyPath,
+			JSON.stringify({
+				version: 1,
+				settings: { showGitBranch: false },
+			}),
+			"utf8",
+		);
+		assert.equal(
+			loadPiGrokBuildUISettings(path, legacyPath).showGitBranch,
+			false,
+		);
+
+		writeFileSync(
+			path,
+			JSON.stringify({
+				version: 1,
+				settings: { showGitBranch: true },
+			}),
+			"utf8",
+		);
+		assert.equal(
+			loadPiGrokBuildUISettings(path, legacyPath).showGitBranch,
+			true,
+		);
+	} finally {
+		rmSync(dir, { recursive: true, force: true });
+	}
+});
+
+test("savePiGrokBuildUISettings atomically round-trips without temp files", () => {
+	const dir = mkdtempSync(join(tmpdir(), "pi-grok-build-ui-settings-"));
+	try {
+		const path = join(dir, "nested", "pi-grok-build-ui.json");
 		const expected = withCustomAccent(
 			{
-				...applyOscuraPreset("minimal"),
+				...applyVisibilityPreset("minimal"),
 				showSessionTitle: true,
 			},
 			"#A3BE8C",
 		)!;
-		saveOscuraSettings(path, expected);
-		assert.deepEqual(loadOscuraSettings(path), expected);
-		assert.deepEqual(readdirSync(join(dir, "nested")), ["oscura-theme.json"]);
+		savePiGrokBuildUISettings(path, expected);
+		assert.deepEqual(loadPiGrokBuildUISettings(path), expected);
+		assert.deepEqual(readdirSync(join(dir, "nested")), [
+			"pi-grok-build-ui.json",
+		]);
 	} finally {
 		rmSync(dir, { recursive: true, force: true });
 	}
