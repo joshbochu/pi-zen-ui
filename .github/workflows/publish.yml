@@ -31,5 +31,15 @@ jobs:
             exit 1
           fi
 
-      - name: Publish package
-        run: npm publish --access public --provenance
+      - name: Publish package if needed
+        shell: bash
+        run: |
+          package_name="$(node -p "require('./package.json').name")"
+          package_version="$(node -p "require('./package.json').version")"
+
+          if [[ "$(npm view "${package_name}@${package_version}" version 2>/dev/null)" == "${package_version}" ]]; then
+            echo "${package_name}@${package_version} is already published."
+            exit 0
+          fi
+
+          npm publish --access public --provenance
