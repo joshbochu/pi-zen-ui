@@ -57,12 +57,12 @@ import {
 import {
 	VISIBILITY_SETTING_KEYS,
 	applyVisibilityPreset,
-	loadPiGrokBuildUISettings,
-	savePiGrokBuildUISettings,
+	loadPiZenUISettings,
+	savePiZenUISettings,
 	withAccentPreset,
 	withCustomAccent,
 	withVisibilitySetting,
-	type PiGrokBuildUISettings,
+	type PiZenUISettings,
 	type VisibilitySettingKey,
 } from "./lib/settings.ts";
 import {
@@ -77,12 +77,11 @@ const THEME_PATH = resolve(
 	dirname(fileURLToPath(import.meta.url)),
 	"../themes/oscura-midnight.json",
 );
-const SETTINGS_PATH = join(getAgentDir(), "pi-grok-build-ui.json");
-const LEGACY_SETTINGS_PATH = join(getAgentDir(), "oscura-theme.json");
+const SETTINGS_PATH = join(getAgentDir(), "pi-zen-ui.json");
 const THEME_TEMPLATE = JSON.parse(
 	readFileSync(THEME_PATH, "utf8"),
 ) as ThemeTemplate;
-const STATUS_KEY = "pi-grok-build-ui-turn-status";
+const STATUS_KEY = "pi-zen-ui-turn-status";
 // Spec §3: grok's whole UI sits inside a 2-column outer pad
 // (`LayoutConfig::outer_hpad_left/right = 2`); chrome rows share it.
 const CHROME_MARGIN = 2;
@@ -107,15 +106,12 @@ const CONTEXT_SEPARATOR = "│";
 // grok's non-Nerd-font git branch icon (`git_info.rs:328`).
 const BRANCH_ICON = "⎇";
 
-function environmentValue(name: string, legacyName: string): string | undefined {
-	return process.env[name] ?? process.env[legacyName];
+function environmentValue(name: string): string | undefined {
+	return process.env[name];
 }
 
 function keepPowerbar(): boolean {
-	return environmentValue(
-		"PI_GROK_BUILD_UI_KEEP_POWERBAR",
-		"PI_OSCURA_KEEP_POWERBAR",
-	) === "1";
+	return environmentValue("PI_ZEN_UI_KEEP_POWERBAR") === "1";
 }
 
 const VISIBILITY_ITEMS: Record<
@@ -213,7 +209,7 @@ function hexFg(
 }
 
 function createAccentTheme(
-	settings: PiGrokBuildUISettings,
+	settings: PiZenUISettings,
 	currentTheme: Theme,
 ): Theme {
 	const maps = buildAccentThemeColors(
@@ -260,27 +256,27 @@ function markdownPalette(fallbackTheme: Theme) {
  */
 function skinMessageComponent(Component: { prototype: object }): void {
 	const proto = Component.prototype as {
-		__piGrokBuildUISkin?: boolean;
+		__piZenUISkin?: boolean;
 		setOutputPad?: (padding: number) => void;
 		updateContent?: (this: object, ...args: unknown[]) => unknown;
 		rebuild?: (this: object, ...args: unknown[]) => unknown;
 	};
-	if (proto.__piGrokBuildUISkin) return;
-	proto.__piGrokBuildUISkin = true;
+	if (proto.__piZenUISkin) return;
+	proto.__piZenUISkin = true;
 
 	const pin = (instance: {
 		outputPad?: number;
 		markdownTheme?: MarkdownThemeLike;
-		__piGrokBuildUIMarkdown?: boolean;
+		__piZenUIMarkdown?: boolean;
 	}) => {
 		instance.outputPad = OUTPUT_PAD;
 		if (
-			instance.__piGrokBuildUIMarkdown ||
+			instance.__piZenUIMarkdown ||
 			!instance.markdownTheme ||
 			!activeTheme
 		)
 			return;
-		instance.__piGrokBuildUIMarkdown = true;
+		instance.__piZenUIMarkdown = true;
 		instance.markdownTheme = grokMarkdownTheme(
 			instance.markdownTheme,
 			markdownPalette(activeTheme),
@@ -341,10 +337,7 @@ function cursorColorEscape(hex: string): string {
 function enableTerminalCanvas(cursorColor: string): void {
 	if (
 		!process.stdout.isTTY ||
-		environmentValue(
-			"PI_GROK_BUILD_UI_TERMINAL_CANVAS",
-			"PI_OSCURA_TERMINAL_CANVAS",
-		) === "0"
+		environmentValue("PI_ZEN_UI_TERMINAL_CANVAS") === "0"
 	) {
 		return;
 	}
@@ -401,7 +394,7 @@ interface EditorChrome {
 }
 
 /** Exported for the pty-free render harness; Pi only sees the default export. */
-export class PiGrokBuildUIEditor extends CustomEditor {
+export class PiZenUIEditor extends CustomEditor {
 	private readonly menuRenderState: { width: number; query: string };
 
 	constructor(
@@ -713,7 +706,7 @@ export class PiGrokBuildUIEditor extends CustomEditor {
 
 function installTurnStatus(
 	ctx: ExtensionContext,
-	getSettings: () => PiGrokBuildUISettings,
+	getSettings: () => PiZenUISettings,
 ): void {
 	ctx.ui.setWidget(
 		STATUS_KEY,
@@ -769,7 +762,7 @@ function installTurnStatus(
 
 function installFooter(
 	ctx: ExtensionContext,
-	getSettings: () => PiGrokBuildUISettings,
+	getSettings: () => PiZenUISettings,
 ): void {
 	ctx.ui.setFooter((tui, _theme, footerData) => {
 		const unsubscribe = footerData.onBranchChange(() => tui.requestRender());
@@ -823,8 +816,8 @@ function installFooter(
 
 async function openSettingsOverlay(
 	ctx: ExtensionContext,
-	getSettings: () => PiGrokBuildUISettings,
-	setSettings: (settings: PiGrokBuildUISettings) => void,
+	getSettings: () => PiZenUISettings,
+	setSettings: (settings: PiZenUISettings) => void,
 ): Promise<void> {
 	await ctx.ui.custom<void>(
 		(tui, _theme, _keybindings, done) => {
@@ -888,7 +881,7 @@ async function openSettingsOverlay(
 					id: "accent-preset",
 					label: "Color preset",
 					description:
-						"Recolor PiGrokBuild UI chrome while preserving the Oscura canvas, syntax, and semantic status colors.",
+						"Recolor Pi Zen UI chrome while preserving the Oscura canvas, syntax, and semantic status colors.",
 					currentValue: ACCENT_PRESET_LABELS[current.accentPreset],
 					values: presetLabels,
 				},
@@ -911,7 +904,7 @@ async function openSettingsOverlay(
 					id: "preset-default",
 					label: "Reset visibility",
 					description:
-						"Show every configurable PiGrokBuild UI region without changing the accent.",
+						"Show every configurable Pi Zen UI region without changing the accent.",
 					currentValue: "apply",
 					values: ["apply"],
 				},
@@ -936,7 +929,7 @@ async function openSettingsOverlay(
 					const theme = ctx.ui.theme;
 					return [
 						truncateToWidth(
-							theme.fg("accent", theme.bold(" PiGrokBuild UI Settings")),
+							theme.fg("accent", theme.bold(" Pi Zen UI Settings")),
 							width,
 						),
 						truncateToWidth(
@@ -973,13 +966,13 @@ async function openSettingsOverlay(
 					settingsList.updateValue(key, current[key] ? "shown" : "hidden");
 				}
 			};
-			const commit = (next: PiGrokBuildUISettings) => {
+			const commit = (next: PiZenUISettings) => {
 				try {
 					setSettings(next);
 					current = next;
 				} catch (error) {
 					ctx.ui.notify(
-						`Could not save PiGrokBuild UI settings: ${error instanceof Error ? error.message : String(error)}`,
+						`Could not save Pi Zen UI settings: ${error instanceof Error ? error.message : String(error)}`,
 						"error",
 					);
 				}
@@ -1051,12 +1044,9 @@ async function openSettingsOverlay(
 	);
 }
 
-export default function piGrokBuildUI(pi: ExtensionAPI) {
+export default function piZenUI(pi: ExtensionAPI) {
 	let activeUi: ExtensionContext["ui"] | undefined;
-	let settings = loadPiGrokBuildUISettings(
-		SETTINGS_PATH,
-		LEGACY_SETTINGS_PATH,
-	);
+	let settings = loadPiZenUISettings(SETTINGS_PATH);
 
 	const applyTheme = (ctx: ExtensionContext) => {
 		try {
@@ -1073,7 +1063,7 @@ export default function piGrokBuildUI(pi: ExtensionAPI) {
 			});
 		} catch (error) {
 			ctx.ui.notify(
-				`Could not apply PiGrokBuild UI accent: ${error instanceof Error ? error.message : String(error)}`,
+				`Could not apply Pi Zen UI accent: ${error instanceof Error ? error.message : String(error)}`,
 				"warning",
 			);
 		}
@@ -1084,22 +1074,18 @@ export default function piGrokBuildUI(pi: ExtensionAPI) {
 		ctx: ExtensionContext,
 	) => {
 		if (ctx.mode !== "tui") {
-			ctx.ui.notify("/pi-grok-build-ui requires TUI mode", "error");
+			ctx.ui.notify("/pi-zen-ui requires TUI mode", "error");
 			return;
 		}
 		await openSettingsOverlay(ctx, () => settings, (next) => {
-			savePiGrokBuildUISettings(SETTINGS_PATH, next);
+			savePiZenUISettings(SETTINGS_PATH, next);
 			settings = next;
 			applyTheme(ctx);
 		});
 	};
 
-	pi.registerCommand("pi-grok-build-ui", {
-		description: "Configure the PiGrokBuild UI",
-		handler: configureAppearance,
-	});
-	pi.registerCommand("oscura", {
-		description: "Alias for /pi-grok-build-ui",
+	pi.registerCommand("pi-zen-ui", {
+		description: "Configure Pi Zen UI",
 		handler: configureAppearance,
 	});
 
@@ -1141,7 +1127,7 @@ export default function piGrokBuildUI(pi: ExtensionAPI) {
 
 		ctx.ui.setEditorComponent(
 			(tui, editorTheme, keybindings) =>
-				new PiGrokBuildUIEditor(
+				new PiZenUIEditor(
 					tui,
 					editorTheme,
 					keybindings,

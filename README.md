@@ -1,6 +1,6 @@
-# PiGrokBuild UI
+# Pi Zen UI
 
-PiGrokBuild UI is an unofficial, high-fidelity port of the
+Pi Zen UI is an unofficial, high-fidelity port of the
 [Grok Build](https://x.ai/build) terminal interface for
 [Pi](https://pi.dev/).
 
@@ -11,7 +11,7 @@ glyphs, formats, and layout are taken from the upstream source rather than
 eyeballed—see [docs/grok-fidelity-spec.md](docs/grok-fidelity-spec.md) for the
 ground truth and the remaining rendering differences.
 
-PiGrokBuild UI is an independent compatibility project. Its scope ends at the
+Pi Zen UI is an independent compatibility project. Its scope ends at the
 presentation and interaction layer: it does not include xAI models,
 authentication, tools, workflows, or the Grok Build agent runtime. Pi continues
 to provide the agent underneath the interface, and broader behavior can be
@@ -20,30 +20,20 @@ added as separate Pi extensions alongside this package.
 ## Install
 
 ```bash
-pi install npm:@joshbochu/pi-grok-build-ui
+pi install npm:@joshbochu/pi-zen-ui
 ```
 
 Or from git:
 
 ```bash
-pi install git:github.com/joshbochu/pi-grok-build-ui
+pi install git:github.com/joshbochu/pi-zen-ui
 ```
 
 Local path (development):
 
 ```bash
-pi install ~/dev/pi-grok-build-ui
+pi install ~/dev/pi-zen-ui
 ```
-
-Upgrading from `@joshbochu/pi-oscura-theme`:
-
-```bash
-pi remove npm:@joshbochu/pi-oscura-theme
-pi install npm:@joshbochu/pi-grok-build-ui
-```
-
-Removing the former package first prevents both extensions from owning the same
-Pi interface. Existing appearance settings are carried forward automatically.
 
 ## Included
 
@@ -51,21 +41,21 @@ Pi interface. Existing appearance settings are carried forward automatically.
   `grok-night.tmTheme` syntax colours (they are a different family from the
   chrome palette; deriving them from the purple accents is the single most
   visible way to get this theme wrong)
-- `extensions/pi-grok-build-ui.ts` — rounded composer, prompt info line,
+- `extensions/pi-zen-ui.ts` — rounded composer, prompt info line,
   turn-status row, autocomplete panel, footer
 - `extensions/lib/` — the pure layout, format and phase logic, unit-tested
-- `bin/pi-grok-build-ui-preview` — isolated alternate-screen preview launcher
+- `bin/pi-zen-ui-preview` — isolated alternate-screen preview launcher
 
-## What PiGrokBuild UI renders
+## What Pi Zen UI renders
 
 ```
   ⠴ Responding… 1.7s · queued                         3.1s ⇣8.42k [stop]
 
-  ╭─────────────────────────────────────────────── pi-grok-build-ui ──╮
+  ╭──────────────────────────────────────────────────── pi-zen-ui ──╮
   │ ❯ Build anything                                                 │
   ╰──────────────────────────────── bedrock-claude-opus-5 • xhigh ───╯
 
-  ⎇ fidelity │ ~/dev/pi-grok-build-ui │ 21K / 1.0M
+  ⎇ fidelity │ ~/dev/pi-zen-ui │ 21K / 1.0M
 ```
 
 - **Turn-status row** — grok's 8-frame braille spinner at 133ms, the phase label
@@ -97,26 +87,25 @@ Pi interface. Existing appearance settings are carried forward automatically.
 From a clone, or after install:
 
 ```bash
-./bin/pi-grok-build-ui-preview
+./bin/pi-zen-ui-preview
 # or
-npx --yes --package=@joshbochu/pi-grok-build-ui pi-grok-build-ui-preview
+npx --yes --package=@joshbochu/pi-zen-ui pi-zen-ui-preview
 ```
 
 Pass normal Pi arguments after the launcher:
 
 ```bash
-./bin/pi-grok-build-ui-preview --thinking low \
+./bin/pi-zen-ui-preview --thinking low \
   "Show a short theme preview with headings, bullets, and code. Do not use tools."
 ```
 
-Set `PI_GROK_BUILD_UI_ALT_SCREEN=0` to keep Pi in normal terminal scrollback.
+Set `PI_ZEN_UI_ALT_SCREEN=0` to keep Pi in normal terminal scrollback.
 
-## `/pi-grok-build-ui` appearance settings
+## `/pi-zen-ui` appearance settings
 
-Run `/pi-grok-build-ui` in Pi to open the PiGrokBuild UI Settings overlay. Use
+Run `/pi-zen-ui` in Pi to open the Pi Zen UI Settings overlay. Use
 the configured Pi selection keys (arrow keys by default) to navigate, Enter or
-Space to change a setting, and Escape to close. Changes apply immediately. The
-former `/oscura` command remains as a compatibility alias.
+Space to change a setting, and Escape to close. Changes apply immediately.
 
 ### Accent colors
 
@@ -152,13 +141,11 @@ All regions are shown by default. **Reset visibility** restores that state.
 **Use Minimal visibility** hides all seven configurable regions; neither action
 changes the selected accent, and each toggle can still be changed afterward.
 
-Settings are global and persist across Pi restarts in PiGrokBuild UI's
-extension-owned `pi-grok-build-ui.json` under Pi's agent directory—normally
-`~/.pi/agent/pi-grok-build-ui.json`, or the directory selected by
+Settings are global and persist across Pi restarts in Pi Zen UI's
+extension-owned `pi-zen-ui.json` under Pi's agent directory—normally
+`~/.pi/agent/pi-zen-ui.json`, or the directory selected by
 `PI_CODING_AGENT_DIR`. Writes are atomic, and missing or malformed settings
-safely fall back to the defaults. PiGrokBuild UI reads the former
-`oscura-theme.json` when the new file does not exist, so existing appearance
-settings carry forward. It does not add private keys to Pi's main
+safely fall back to the defaults. It does not add private keys to Pi's main
 `settings.json`.
 
 The completion dropdown, prompt marker, headings, and context gradient inherit
@@ -172,7 +159,7 @@ The skin temporarily sets the terminal default background to `#030304` with OSC 
 Disable this behavior for one run:
 
 ```bash
-PI_GROK_BUILD_UI_TERMINAL_CANVAS=0 pi
+PI_ZEN_UI_TERMINAL_CANVAS=0 pi
 ```
 
 After an ungraceful process kill, reset the terminal background manually:
@@ -184,9 +171,8 @@ printf '\e]111\a'
 ## Notes
 
 The extension builds `oscura-midnight` in memory at TUI startup using the saved
-accent selection. Set `PI_GROK_BUILD_UI_KEEP_POWERBAR=1` to retain
-pi-powerbar's widget. The former `PI_OSCURA_*` names remain supported for
-compatibility.
+accent selection. Set `PI_ZEN_UI_KEEP_POWERBAR=1` to retain pi-powerbar's
+widget.
 
 The cursor is set to the theme's accent with OSC 12 and restored with OSC 112,
 alongside the canvas sequences above.
@@ -206,7 +192,7 @@ npm run typecheck
 
 Everything with layout or format logic lives in `extensions/lib/` as a pure
 module so it can be tested without booting a TUI.
-`extensions/pi-grok-build-ui.ts` is the wiring layer, verified by running Pi
+`extensions/pi-zen-ui.ts` is the wiring layer, verified by running Pi
 under a pty and inspecting the emitted frames.
 
 ## Recommended Pi settings
