@@ -17,7 +17,7 @@ import {
 	type AccentPreset,
 } from "./palette.ts";
 
-export const PI_GROK_BUILD_UI_SETTINGS_VERSION = 1;
+export const PI_ZEN_UI_SETTINGS_VERSION = 1;
 export type { AccentPreset } from "./palette.ts";
 
 export const VISIBILITY_SETTING_KEYS = [
@@ -32,7 +32,7 @@ export const VISIBILITY_SETTING_KEYS = [
 
 export type VisibilitySettingKey = (typeof VISIBILITY_SETTING_KEYS)[number];
 
-export interface PiGrokBuildUISettings {
+export interface PiZenUISettings {
 	accentPreset: AccentPreset;
 	customAccent: string;
 	showSessionTitle: boolean;
@@ -46,7 +46,7 @@ export interface PiGrokBuildUISettings {
 
 export type VisibilityPreset = "default" | "minimal";
 
-export const DEFAULT_PI_GROK_BUILD_UI_SETTINGS: Readonly<PiGrokBuildUISettings> =
+export const DEFAULT_PI_ZEN_UI_SETTINGS: Readonly<PiZenUISettings> =
 	Object.freeze({
 		accentPreset: "oscura",
 		customAccent: DEFAULT_CUSTOM_ACCENT,
@@ -59,7 +59,7 @@ export const DEFAULT_PI_GROK_BUILD_UI_SETTINGS: Readonly<PiGrokBuildUISettings> 
 		showTurnStatus: true,
 	});
 
-export const MINIMAL_PI_GROK_BUILD_UI_SETTINGS: Readonly<PiGrokBuildUISettings> =
+export const MINIMAL_PI_ZEN_UI_SETTINGS: Readonly<PiZenUISettings> =
 	Object.freeze({
 		accentPreset: "oscura",
 		customAccent: DEFAULT_CUSTOM_ACCENT,
@@ -72,13 +72,13 @@ export const MINIMAL_PI_GROK_BUILD_UI_SETTINGS: Readonly<PiGrokBuildUISettings> 
 		showTurnStatus: false,
 	});
 
-interface PiGrokBuildUISettingsFile {
-	version: typeof PI_GROK_BUILD_UI_SETTINGS_VERSION;
-	settings: PiGrokBuildUISettings;
+interface PiZenUISettingsFile {
+	version: typeof PI_ZEN_UI_SETTINGS_VERSION;
+	settings: PiZenUISettings;
 }
 
-function defaults(): PiGrokBuildUISettings {
-	return { ...DEFAULT_PI_GROK_BUILD_UI_SETTINGS };
+function defaults(): PiZenUISettings {
+	return { ...DEFAULT_PI_ZEN_UI_SETTINGS };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -86,9 +86,9 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 /** Keep known, valid fields from a partial value and default everything else. */
-export function normalizePiGrokBuildUISettings(
+export function normalizePiZenUISettings(
 	value: unknown,
-): PiGrokBuildUISettings {
+): PiZenUISettings {
 	const normalized = defaults();
 	if (!isRecord(value)) return normalized;
 	if (isAccentPreset(value.accentPreset)) {
@@ -105,36 +105,36 @@ export function normalizePiGrokBuildUISettings(
 /** Apply a visibility preset without discarding the selected accent. */
 export function applyVisibilityPreset(
 	preset: VisibilityPreset,
-	current: Readonly<PiGrokBuildUISettings> = DEFAULT_PI_GROK_BUILD_UI_SETTINGS,
-): PiGrokBuildUISettings {
+	current: Readonly<PiZenUISettings> = DEFAULT_PI_ZEN_UI_SETTINGS,
+): PiZenUISettings {
 	const visibility =
 		preset === "minimal"
-			? MINIMAL_PI_GROK_BUILD_UI_SETTINGS
-			: DEFAULT_PI_GROK_BUILD_UI_SETTINGS;
+			? MINIMAL_PI_ZEN_UI_SETTINGS
+			: DEFAULT_PI_ZEN_UI_SETTINGS;
 	const next = { ...current };
 	for (const key of VISIBILITY_SETTING_KEYS) next[key] = visibility[key];
 	return next;
 }
 
 export function withVisibilitySetting(
-	settings: PiGrokBuildUISettings,
+	settings: PiZenUISettings,
 	key: VisibilitySettingKey,
 	value: boolean,
-): PiGrokBuildUISettings {
+): PiZenUISettings {
 	return { ...settings, [key]: value };
 }
 
 export function withAccentPreset(
-	settings: PiGrokBuildUISettings,
+	settings: PiZenUISettings,
 	accentPreset: AccentPreset,
-): PiGrokBuildUISettings {
+): PiZenUISettings {
 	return { ...settings, accentPreset };
 }
 
 export function withCustomAccent(
-	settings: PiGrokBuildUISettings,
+	settings: PiZenUISettings,
 	value: string,
-): PiGrokBuildUISettings | undefined {
+): PiZenUISettings | undefined {
 	const customAccent = normalizeHexColor(value);
 	return customAccent
 		? { ...settings, accentPreset: "custom", customAccent }
@@ -143,43 +143,37 @@ export function withCustomAccent(
 
 /**
  * Malformed, unreadable, unsupported, or missing files safely use defaults.
- * A legacy path is consulted only while the primary file does not exist.
  */
-export function loadPiGrokBuildUISettings(
+export function loadPiZenUISettings(
 	path: string,
-	legacyPath?: string,
-): PiGrokBuildUISettings {
+): PiZenUISettings {
 	try {
-		const sourcePath =
-			existsSync(path) || !legacyPath || !existsSync(legacyPath)
-				? path
-				: legacyPath;
-		if (!existsSync(sourcePath)) return defaults();
-		const parsed: unknown = JSON.parse(readFileSync(sourcePath, "utf8"));
+		if (!existsSync(path)) return defaults();
+		const parsed: unknown = JSON.parse(readFileSync(path, "utf8"));
 		if (
 			!isRecord(parsed) ||
-			parsed.version !== PI_GROK_BUILD_UI_SETTINGS_VERSION
+			parsed.version !== PI_ZEN_UI_SETTINGS_VERSION
 		) {
 			return defaults();
 		}
-		return normalizePiGrokBuildUISettings(parsed.settings);
+		return normalizePiZenUISettings(parsed.settings);
 	} catch {
 		return defaults();
 	}
 }
 
 /** Write in the destination directory, fsync, then atomically rename into place. */
-export function savePiGrokBuildUISettings(
+export function savePiZenUISettings(
 	path: string,
-	settings: PiGrokBuildUISettings,
+	settings: PiZenUISettings,
 ): void {
 	mkdirSync(dirname(path), { recursive: true });
 	const tempPath = `${path}.tmp-${process.pid}-${Date.now()}-${Math.random()
 		.toString(16)
 		.slice(2)}`;
-	const file: PiGrokBuildUISettingsFile = {
-		version: PI_GROK_BUILD_UI_SETTINGS_VERSION,
-		settings: normalizePiGrokBuildUISettings(settings),
+	const file: PiZenUISettingsFile = {
+		version: PI_ZEN_UI_SETTINGS_VERSION,
+		settings: normalizePiZenUISettings(settings),
 	};
 	let fd: number | undefined;
 	try {

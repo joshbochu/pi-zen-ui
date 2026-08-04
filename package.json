@@ -1,7 +1,7 @@
 {
-  "name": "@joshbochu/pi-grok-build-ui",
-  "version": "0.3.0",
-  "description": "PiGrokBuild UI: an unofficial Grok Build presentation layer for Pi",
+  "name": "@joshbochu/pi-zen-ui",
+  "version": "0.3.1",
+  "description": "Pi Zen UI: an unofficial Grok Build presentation layer for Pi",
   "type": "module",
   "scripts": {
     "test": "node --test \"extensions/lib/*.test.ts\"",
@@ -11,11 +11,11 @@
   "author": "joshbochu",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/joshbochu/pi-grok-build-ui.git"
+    "url": "git+https://github.com/joshbochu/pi-zen-ui.git"
   },
-  "homepage": "https://github.com/joshbochu/pi-grok-build-ui#readme",
+  "homepage": "https://github.com/joshbochu/pi-zen-ui#readme",
   "bugs": {
-    "url": "https://github.com/joshbochu/pi-grok-build-ui/issues"
+    "url": "https://github.com/joshbochu/pi-zen-ui/issues"
   },
   "publishConfig": {
     "access": "public",
@@ -29,13 +29,13 @@
     "LICENSE"
   ],
   "bin": {
-    "pi-grok-build-ui-preview": "bin/pi-grok-build-ui-preview"
+    "pi-zen-ui-preview": "bin/pi-zen-ui-preview"
   },
   "keywords": [
     "pi-package",
     "pi-theme",
     "pi",
-    "grok-build-ui",
+    "zen-ui",
     "grok-build",
     "grok",
     "coding-agent",
@@ -51,7 +51,7 @@
   },
   "pi": {
     "extensions": [
-      "./extensions/pi-grok-build-ui.ts"
+      "./extensions/pi-zen-ui.ts"
     ],
     "themes": [
       "./themes/oscura-midnight.json"
