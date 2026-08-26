@@ -49,6 +49,7 @@ import {
 	infoLine,
 	placeholderRow,
 	PLACEHOLDER,
+	promptWrapWidth,
 	stripAnsi,
 	titleOnBorder,
 	truncateToWidth,
@@ -90,9 +91,9 @@ const CHROME_MARGIN = 2;
 // exactly one blank cell separates │ from ❯.
 const PROMPT_INSET = 1;
 const PROMPT_MARKER = "❯ ";
-// Pi's Editor only supports symmetric padding. We keep its 2-column left pad
-// for the prefix substitution, then render wide enough to clip the matching
-// right pad at our frame instead of wrapping two columns before grok does.
+// Pi's Editor only supports symmetric padding. The 2-column left pad is the
+// `❯ ` slot; clipping the prefix-substitution overhang off the right pad
+// leaves a matching 1-cell gap before `│`, same as Grok's chrome_pad_right=2.
 const EDITOR_PADDING_X = 2;
 // Spec §6: grok's transcript rows are [outer pad 2][accent ┃][block pad 2],
 // putting content at column 5. (grok's composer text lands at column 6; the
@@ -403,13 +404,15 @@ interface EditorChrome {
 /** Exported for the pty-free render harness; Pi only sees the default export. */
 export class PiGrokBuildUIEditor extends CustomEditor {
 	private readonly menuRenderState: { width: number; query: string };
+	private readonly fullTheme: () => Theme;
+	private readonly chrome: EditorChrome;
 
 	constructor(
 		tui: TUI,
 		editorTheme: EditorTheme,
 		keybindings: KeybindingsManager,
-		private readonly fullTheme: () => Theme,
-		private readonly chrome: EditorChrome,
+		fullTheme: () => Theme,
+		chrome: EditorChrome,
 	) {
 		const menuRenderState = { width: 1, query: "" };
 		super(
@@ -449,6 +452,8 @@ export class PiGrokBuildUIEditor extends CustomEditor {
 			{ paddingX: EDITOR_PADDING_X, autocompleteMaxVisible: 6 },
 		);
 		this.menuRenderState = menuRenderState;
+		this.fullTheme = fullTheme;
+		this.chrome = chrome;
 	}
 
 	override setPaddingX(_padding: number): void {
@@ -583,18 +588,18 @@ export class PiGrokBuildUIEditor extends CustomEditor {
 			);
 
 		const { outerMargin, contentWidth, promptInset } = editorLayout(width);
-		// Pi reserves EDITOR_PADDING_X on both sides. Request the right pad as
-		// extra source width, then let fit() clip it after the left inset/prefix
-		// substitution. This preserves the left geometry while giving the text
-		// Grok's full width through the cell immediately before the right border.
+		// Symmetric 1-cell gaps inside both `│`. The editor wraps at
+		// contentWidth - 2*EDITOR_PADDING_X so a resize reflows instead of
+		// clipping into the right border or leaving a 2-col hole.
 		const baseEditorWidth = editorRenderWidth(
 			contentWidth,
 			promptInset,
 			EDITOR_PADDING_X,
 		);
-		this.menuRenderState.width = Math.max(
-			1,
-			baseEditorWidth - EDITOR_PADDING_X * 2,
+		this.menuRenderState.width = promptWrapWidth(
+			contentWidth,
+			promptInset,
+			EDITOR_PADDING_X,
 		);
 		// The slash menu filters by the leading token, so it doubles as the
 		// fuzzy-match run for dropdown labels (see paintMenuLabel).

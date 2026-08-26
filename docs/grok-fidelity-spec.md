@@ -97,10 +97,16 @@ TokyoNight-derived; deriving syntax colors from the purple chrome palette is wro
   the turn-status row and the top status bar all share the horizontal pad.
 - Rounded 4-side box: `╭` U+256D `─` U+2500 `╮` U+256E / `│` U+2502 / `╰` U+2570 `╯` U+256F.
 - Border color `prompt_border` idle, `prompt_border_active` when focused (`mod.rs:2902`).
-- Content inset: `chrome_pad_left = 2` measured **from the border cell**, so exactly
-  one blank cell separates `│` from the prefix. Prefix `"❯ "` U+276F + space, always
-  2 cols (`glyphs.rs:23`, `PROMPT_ARROW_WIDTH = 2`), color `accent_user` focused /
-  `gray_dim` unfocused, **no bold** (`mod.rs:3008`). Never replaced by a spinner.
+- Content inset: the agent composer passes `LayoutConfig.block_pad_left/right = 2`
+  through as `chrome_pad_left/right` (`agent_view/render.rs`). Each pad is measured
+  **from the border cell**, so exactly one blank cell separates `│` from the prefix
+  on the left **and** the last text cell from `│` on the right. (`PromptStyle`'s
+  default `chrome_pad_right: 1` is not used for the boxed agent composer.) Prefix
+  `"❯ "` U+276F + space, always 2 cols (`glyphs.rs:23`, `PROMPT_ARROW_WIDTH = 2`),
+  color `accent_user` focused / `gray_dim` unfocused, **no bold** (`mod.rs:3008`).
+  Never replaced by a spinner. Text wrapping is `box inner − insets − prefix`
+  (`area_width − chrome_pad_left − chrome_pad_right − PROMPT_ARROW_WIDTH`) and
+  follows the terminal width.
 - Prefix overrides: `"! "` `command`, `"~ "` `accent_feedback`, `"# "` `accent_remember`,
   `"? "` `accent_user`.
 - Placeholder `"Build anything"` in `gray`, shown only when the buffer is empty

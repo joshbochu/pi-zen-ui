@@ -9,16 +9,54 @@ export const PLACEHOLDER = "Build anything";
 
 /**
  * Width passed to Pi's symmetrically padded editor before the framed row clips
- * its right pad. Grok has a left inset but no spare cell between a full text
- * row and the right border; rendering `rightPad` columns wide preserves Pi's
- * left padding while reclaiming those columns from the right.
+ * the prefix-substitution overhang.
+ *
+ * Pi only supports matching left/right `paddingX`. The first row's left pad is
+ * the 2-col slot for `❯ `; substituting `promptInset + ❯ ` grows that row by
+ * `promptInset`. Clipping the overhang off the right pad leaves
+ * `rightPad - promptInset` cells before the right border. Matching Grok's
+ * `chrome_pad_left` / `chrome_pad_right` of 2 (one blank cell inside each
+ * `│`) means `rightPad - promptInset === promptInset`, so:
+ *
+ *   editorWidth = contentWidth + rightPad - 2 * promptInset
+ *
+ * Wrapping then uses `editorWidth - 2 * rightPad` and tracks the inner width
+ * as the terminal resizes, instead of wrapping early or running into the
+ * border.
  */
 export function editorRenderWidth(
 	contentWidth: number,
 	promptInset: number,
 	rightPad: number,
 ): number {
-	return Math.max(1, contentWidth - promptInset + rightPad);
+	return Math.max(1, contentWidth + rightPad - 2 * promptInset);
+}
+
+/** Soft-wrap budget inside the editor (prefix + this + both insets = inner). */
+export function promptWrapWidth(
+	contentWidth: number,
+	promptInset: number,
+	editorPad: number,
+): number {
+	return Math.max(
+		1,
+		editorRenderWidth(contentWidth, promptInset, editorPad) - editorPad * 2,
+	);
+}
+
+/**
+ * Cells remaining before the right `│` after prefix substitution is clipped to
+ * `contentWidth`. Equals `promptInset` whenever the editor width formula above
+ * is used, so the box stays left/right symmetric as `contentWidth` changes.
+ */
+export function promptRightInset(
+	contentWidth: number,
+	promptInset: number,
+	editorPad: number,
+): number {
+	const editorWidth = editorRenderWidth(contentWidth, promptInset, editorPad);
+	const overhang = Math.max(0, editorWidth + promptInset - contentWidth);
+	return Math.max(0, editorPad - overhang);
 }
 
 /** Oscura's preferred model/effort separator: U+2022 with single spaces. */
