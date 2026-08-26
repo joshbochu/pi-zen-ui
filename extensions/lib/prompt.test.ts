@@ -8,6 +8,8 @@ import {
 	infoLine,
 	overlayRight,
 	placeholderRow,
+	promptRightInset,
+	promptWrapWidth,
 	stripAnsi,
 	titleOnBorder,
 	truncateToWidth,
@@ -23,7 +25,7 @@ test("PLACEHOLDER is grok's literal", () => {
 	assert.equal(PLACEHOLDER, "Build anything");
 });
 
-test("editorRenderWidth reclaims Pi's symmetric right padding", () => {
+test("editorRenderWidth keeps matching 1-cell gaps inside both borders", () => {
 	const contentWidth = 74;
 	const promptInset = 1;
 	const editorPadding = 2;
@@ -34,17 +36,42 @@ test("editorRenderWidth reclaims Pi's symmetric right padding", () => {
 		editorPadding,
 	);
 
-	// Pi removes paddingX from both sides to find its wrapping width. The
-	// widened source therefore leaves exactly Grok's content budget after the
-	// left inset and `❯ `, rather than wrapping two columns early.
-	assert.equal(sourceWidth, 75);
+	assert.equal(sourceWidth, contentWidth);
 	assert.equal(
-		sourceWidth - editorPadding * 2,
-		contentWidth - promptInset - markerWidth,
+		promptWrapWidth(contentWidth, promptInset, editorPadding),
+		contentWidth - editorPadding * 2,
 	);
-	// Adding the inset back makes the rendered row overhang by precisely the
-	// right pad that the outer frame clips.
-	assert.equal(sourceWidth + promptInset - contentWidth, editorPadding);
+	assert.equal(
+		promptRightInset(contentWidth, promptInset, editorPadding),
+		promptInset,
+	);
+	assert.equal(
+		promptInset +
+			markerWidth +
+			promptWrapWidth(contentWidth, promptInset, editorPadding) +
+			promptInset,
+		contentWidth,
+	);
+});
+
+test("prompt box inner layout stays symmetric across terminal widths", () => {
+	const editorPadding = 2;
+	const markerWidth = 2;
+	const chromeMargin = 2;
+	const borders = 2;
+
+	for (let width = 12; width <= 160; width++) {
+		const contentWidth = Math.max(1, width - chromeMargin * 2 - borders);
+		const promptInset = contentWidth > 1 + 4 ? 1 : 0;
+		const wrap = promptWrapWidth(contentWidth, promptInset, editorPadding);
+		const right = promptRightInset(contentWidth, promptInset, editorPadding);
+		const assembled = promptInset + markerWidth + wrap + right;
+
+		assert.equal(right, promptInset, `asymmetric at width ${width}`);
+		assert.equal(assembled, contentWidth, `overflow at width ${width}`);
+		assert.equal(wrap, width - 10, `wrap did not track resize at width ${width}`);
+		assert.ok(wrap >= 1, `wrap collapsed at width ${width}`);
+	}
 });
 
 test("stripAnsi removes CSI, OSC (BEL and ST) and APC (BEL and ST)", () => {
