@@ -404,13 +404,15 @@ interface EditorChrome {
 /** Exported for the pty-free render harness; Pi only sees the default export. */
 export class PiGrokBuildUIEditor extends CustomEditor {
 	private readonly menuRenderState: { width: number; query: string };
+	private readonly fullTheme: () => Theme;
+	private readonly chrome: EditorChrome;
 
 	constructor(
 		tui: TUI,
 		editorTheme: EditorTheme,
 		keybindings: KeybindingsManager,
-		private readonly fullTheme: () => Theme,
-		private readonly chrome: EditorChrome,
+		fullTheme: () => Theme,
+		chrome: EditorChrome,
 	) {
 		const menuRenderState = { width: 1, query: "" };
 		super(
@@ -450,6 +452,8 @@ export class PiGrokBuildUIEditor extends CustomEditor {
 			{ paddingX: EDITOR_PADDING_X, autocompleteMaxVisible: 6 },
 		);
 		this.menuRenderState = menuRenderState;
+		this.fullTheme = fullTheme;
+		this.chrome = chrome;
 	}
 
 	override setPaddingX(_padding: number): void {
