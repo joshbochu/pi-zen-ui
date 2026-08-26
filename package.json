@@ -1,6 +1,6 @@
 {
   "name": "@joshbochu/pi-grok-build-ui",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "PiGrokBuild UI: an unofficial Grok Build presentation layer for Pi",
   "type": "module",
   "scripts": {
