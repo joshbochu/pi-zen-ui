@@ -1,0 +1,8 @@
+{
+  "name": "PiGrokBuild UI",
+  "user": "ubuntu",
+  "build": {
+    "dockerfile": "Dockerfile"
+  },
+  "install": "npm install --no-save --no-package-lock @earendil-works/pi-coding-agent@0.81.1 @earendil-works/pi-tui@0.81.1 typescript@5 @types/node@22"
+}
